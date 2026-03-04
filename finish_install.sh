@@ -25,6 +25,9 @@ PRETTY_OUTPUT_LIBRARY=/pretty_output_library.sh
 
 COMPLETION_FILE="/finish_install_completion.txt"
 
+APT_CACHE_SERVER="http://192.168.8.190:3142/"
+APT_CACHE_FILE="/etc/apt/apt.conf.d/10proxy"
+
 export DEBIAN_FRONTEND=noninteractive
 
 if [[ "$(whoami)" != "root" ]]
@@ -60,6 +63,23 @@ if [[ -z "$username" ]]
 then
     printf "\n\n\e[31m%s\e[0m\n\n" \
         "[!] No username set. Make sure to run start_install.sh first"
+    exit 1
+fi
+
+if ! [[ \
+    "$(cat $APT_CACHE_FILE 2>/dev/null)" \
+    == "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" ]]
+then
+    echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" > $APT_CACHE_FILE &
+    task_output $! "$STDERR_LOG_PATH" "Use apt proxy server '$APT_CACHE_SERVER'"
+    [[ $? -ne 0 ]] && exit 1
+fi
+
+if ! apt-config dump | grep "Proxy" &>/dev/null
+then
+    printf "\n\n\e[31m%s %s\e[0m\n\n" \
+        "[!] The apt proxy isn't set up correctly. This shouldn't" \
+        "happen...stopping"
     exit 1
 fi
 
