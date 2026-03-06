@@ -109,6 +109,7 @@ then
     apt-get install --yes locales \
         git efibootmgr efivar linux-image-amd64 \
         grub-efi-amd64-bin network-manager sudo \
+        plymouth plymouth-themes \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Install system packages"
     [[ $? -ne 0 ]] && exit 1
@@ -144,6 +145,51 @@ then
     echo "generate_locale" >> $COMPLETION_FILE
 fi
 
+if ! grep "^configure_grub$" $COMPLETION_FILE &>/dev/null
+then
+    if [[ -f "/usr/share/grub/default/grub" ]]
+    then
+        cp /usr/share/grub/default/grub /etc/default/grub \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Configure Grub"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+
+    if ! grep "^GRUB_CMDLINE_LINUX_DEFAULT" /etc/default/grub &>/dev/null
+    then
+        echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' >> /etc/default/grub
+    else
+        sed -i \
+            '/^GRUB_CMDLINE_LINUX_DEFAULT/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' /etc/default/grub
+    fi
+
+    if ! grep "^GRUB_GFXMODE" /etc/default/grub &>/dev/null
+    then
+        echo 'GRUB_GFXMODE=1920x1080' >> /etc/default/grub
+    else
+        sed -i \
+            '/^GRUB_GFXMODE/c\GRUB_GFXMODE=1920x1080' /etc/default/grub
+    fi
+
+    if ! grep "^GRUB_TIMEOUT" /etc/default/grub &>/dev/null
+    then
+        echo 'GRUB_TIMEOUT=0' >> /etc/default/grub
+    else
+        sed -i \
+            '/^GRUB_TIMEOUT/c\GRUB_TIMEOUT=0' /etc/default/grub
+    fi
+
+    if ! grep "^GRUB_TIMEOUT_STYLE" /etc/default/grub &>/dev/null
+    then
+        echo 'GRUB_TIMEOUT_STYLE=hidden' >> /etc/default/grub
+    else
+        sed -i \
+            '/^GRUB_TIMEOUT_STYLE/c\GRUB_TIMEOUT_STYLE=hidden' /etc/default/grub
+    fi
+
+    echo "configure_grub" >> $COMPLETION_FILE
+fi
+
 if ! grep "^grub_install$" $COMPLETION_FILE &>/dev/null
 then
     grub-install --target=x86_64-efi --efi-directory=/boot/efi \
@@ -160,6 +206,7 @@ then
     grub-mkconfig -o /boot/grub/grub.cfg \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Configure grub"
+    [[ $? -ne 0 ]] && exit 1
 
     echo "grub_mkconfig" >> $COMPLETION_FILE
 fi
@@ -168,8 +215,18 @@ if ! grep "^update_initramfs$" $COMPLETION_FILE &>/dev/null
 then
     update-initramfs -u >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Update the initramfs"
+    [[ $? -ne 0 ]] && exit 1
 
     echo "update_initramfs" >> $COMPLETION_FILE
+fi
+
+if ! grep "^set_splash_theme$" $COMPLETION_FILE &>/dev/null
+then
+    plymouth-set-default-theme -R moonlight \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" "Set the splash theme with plymouth-themes"
+
+    echo "set_splash_theme" >> $COMPLETION_FILE
 fi
 
 if ! id administrator &>/dev/null
