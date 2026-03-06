@@ -1,0 +1,6 @@
+DISK="/dev/vda"
+EFI_PARTITION="/dev/vda1"
+ROOT_PARTITION="/dev/vda2"
+
+APT_CACHE_SERVER="http://192.168.8.190:3142/"
+APT_CACHE_FILE="/etc/apt/apt.conf.d/10proxy"

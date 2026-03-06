@@ -18,9 +18,6 @@
 
 # TODO: Add logic for selecting disk
 # TODO: Check that disk and partitions exist before running
-disk="/dev/vda"
-efi_partition="/dev/vda1"
-root_partition="/dev/vda2"
 
 # TODO: Add section for checking that all needed files are accessible
 
@@ -28,12 +25,19 @@ INSTALLATION_VARIABLES_FILE=/tmp/activate_installation_variables.sh
 
 PRETTY_OUTPUT_LIBRARY=./DebianInstaller/pretty_output_library.sh
 
-COMPLETION_FILE="start_install_completion.txt"
+COMPLETION_FILE=./start_install_completion.txt
 
-APT_CACHE_SERVER="http://192.168.8.190:3142/"
-APT_CACHE_FILE="/etc/apt/apt.conf.d/10proxy"
+INSTALL_CONSTANTS_FILE=./DebianInstaller/install_constants
 
 export DEBIAN_FRONTEND=noninteractive
+
+if ! source $INSTALL_CONSTANTS_FILE &>/dev/null
+then
+    printf "\n\n\e[31m%s %s\e[0m\n\n" \
+        "[!] Couldn't source the install_constants file. Make sure" \
+        "to run \`bash ./DebianInstaller/start_install.sh\`"
+    exit 1
+fi
 
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
@@ -103,6 +107,30 @@ then
     exit 1
 fi
 
+check_required_install_constants()
+{
+    if [[ -z "$DISK" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$DISK constant not set, this is fatal...stopping"
+        exit 1
+    fi
+    if [[ -z "$EFI_PARTITION" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$DISK constant not set, this is fatal...stopping"
+        exit 1
+    fi
+    if [[ -z "$ROOT_PARTITION" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$DISK constant not set, this is fatal...stopping"
+        exit 1
+    fi
+}
+
+check_required_install_constants
+
 # We should remove the admin_password from the install variables file
 # if set_admin_password isn't in the completion file, because it could
 # mean the user wants to enter a new password
@@ -165,21 +193,25 @@ then
     [[ $? -ne 0 ]] && exit 1
 fi
 
-if ! [[ \
-    "$(cat $APT_CACHE_FILE 2>/dev/null)" \
-    == "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" ]]
+if [[ -n "$APT_CACHE_SERVER" && -n "$APT_CACHE_FILE" ]]
 then
-    echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" > $APT_CACHE_FILE &
-    task_output $! "$STDERR_LOG_PATH" "Use apt proxy server '$APT_CACHE_SERVER'"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    if ! grep "Acquire::http::Proxy \"$APT_CACHE_SERVER\";"\
+        $APT_CACHE_FILE &>/dev/null
+    then
+        echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" \
+            > $APT_CACHE_FILE &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Use apt proxy server '$APT_CACHE_SERVER'"
+        [[ $? -ne 0 ]] && exit 1
+    fi
 
-if ! apt-config dump | grep "Proxy" &>/dev/null
-then
-    printf "\n\n\e[31m%s %s\e[0m\n\n" \
-        "[!] The apt proxy isn't set up correctly. This shouldn't" \
-        "happen...stopping"
-    exit 1
+    if ! apt-config dump | grep "Proxy" &>/dev/null
+    then
+        printf "\n\n\e[31m%s %s\e[0m\n\n" \
+            "[!] The apt proxy isn't set up correctly. This shouldn't" \
+            "happen...stopping"
+        exit 1
+    fi
 fi
 
 if ! grep "^apt_update$" $COMPLETION_FILE &>/dev/null
@@ -213,7 +245,7 @@ fi
 
 if ! grep "^mkfs_boot$" $COMPLETION_FILE &>/dev/null
 then
-    echo 'y' | mkfs.fat -F 32 $efi_partition \
+    echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Format boot partition with FAT32"
     [[ $? -ne 0 ]] && exit 1
@@ -223,7 +255,7 @@ fi
 
 if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
 then
-    echo 'y' | mkfs.ext4 $root_partition \
+    echo 'y' | mkfs.ext4 $ROOT_PARTITION \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Configure System For EXT4"
     [[ $? -ne 0 ]] && exit 1
@@ -233,7 +265,7 @@ fi
 
 if ! grep "^mount_root$" $COMPLETION_FILE &>/dev/null
 then
-    mount $root_partition /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    mount $ROOT_PARTITION /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Mount the root partition"
     [[ $? -ne 0 ]] && exit 1
 
@@ -242,7 +274,7 @@ fi
 
 if ! grep "^mount_boot$" $COMPLETION_FILE &>/dev/null
 then
-    mount --mkdir $efi_partition /mnt/boot/efi \
+    mount --mkdir $EFI_PARTITION /mnt/boot/efi \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Mount the boot partition"
     [[ $? -ne 0 ]] && exit 1
@@ -271,10 +303,21 @@ fi
 
 if ! grep "^run_debootstrap$" $COMPLETION_FILE &>/dev/null
 then
-    debootstrap --arch amd64 stable /mnt $APT_CACHE_SERVER/deb.debian.org/debian \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Run debootstrap (this could take a while on slow internet)"
-    [[ $? -ne 0 ]] && exit 1
+    if [[ -n "$APT_CACHE_SERVER" ]]
+    then
+        debootstrap --arch amd64 stable /mnt \
+            $APT_CACHE_SERVER/deb.debian.org/debian \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Run debootstrap (this could take a while on slow internet)"
+        [[ $? -ne 0 ]] && exit 1
+    else
+        debootstrap --arch amd64 stable /mnt https://deb.debian.org/debian \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Run debootstrap (this could take a while on slow internet)"
+        [[ $? -ne 0 ]] && exit 1
+    fi
 
     echo "run_debootstrap" >> $COMPLETION_FILE
 fi
@@ -347,6 +390,17 @@ then
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" \
         "Copy '$INSTALLATION_VARIABLES_FILE' to the new system"
+    [[ $? -ne 0 ]] && exit 1
+fi
+
+
+if ! cmp -s $INSTALL_CONSTANTS_FILE \
+    /mnt/$(basename $INSTALL_CONSTANTS_FILE) &>/dev/null
+then
+    cp $INSTALL_CONSTANTS_FILE /mnt/ \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" \
+        "Copy '$INSTALL_CONSTANTS_FILE' to the new system"
     [[ $? -ne 0 ]] && exit 1
 fi
 
