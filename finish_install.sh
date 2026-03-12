@@ -286,6 +286,42 @@ then
     exit 1
 fi
 
+if [[ -d "/home/administrator" ]]
+then
+    cd /home/administrator
+    git clone https://www.github.com/JustScott/DebianPreset &>/dev/null
+    task_output $! "$STDERR_LOG_PATH" \
+        "Clone DebianPreset to administrator's \$HOME"
+    if [[ -d /home/administrator/DebianPreset ]]
+    then
+        chown administrator:administrator -R /home/administrator/DebianPreset
+    fi
+else
+    printf "\n\e[31m%s %s\e[0m\n" \
+        "[!] administrator's \$HOME doesn't exist, this shouldn't" \
+        "happen... stopping"
+    exit 1
+fi
+
+if [[ -d "/home/$username" ]]
+then
+    cd /home/$username
+    git clone https://www.github.com/JustScott/DebianPreset &>/dev/null
+    task_output $! "$STDERR_LOG_PATH" \
+        "Clone DebianPreset to $username's \$HOME"
+    if [[ -d /home/$username/DebianPreset ]]
+    then
+        chown $username:$username -R /home/$username/DebianPreset
+    fi
+else
+    printf "\n\e[31m%s %s\e[0m\n" \
+        "[!] $username's \$HOME doesn't exist, this shouldn't" \
+        "happen... stopping"
+    exit 1
+fi
+
+cd /
+
 # No need for completion tracking
 passwd -d $username >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
 task_output $! "$STDERR_LOG_PATH" "Make user account passwordless"
