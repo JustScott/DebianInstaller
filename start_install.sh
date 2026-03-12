@@ -135,12 +135,10 @@ check_for_cache_server()
 {
     if [[ -n "$APT_CACHE_SERVER" ]]
     then
-        if ! curl "$APT_CACHE_SERVER" &>/dev/null
-        then
-            printf "\n\e[31m%s\e[0m\n" \
-                "[!] Couldn't reach the apt caching server at '$APT_CACHE_SERVER'"
-            exit 1
-        fi
+        curl "$APT_CACHE_SERVER" &>/dev/null &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Check connection to apt cache server at '$APT_CACHE_SERVER'"
+        [[ $? -ne 0 ]] && exit 1
     fi
 
     return 0
