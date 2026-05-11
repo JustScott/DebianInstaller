@@ -185,7 +185,7 @@ then
                     gdm3 gnome-backgrounds gnome-bluetooth-sendto \
                     gnome-control-center gnome-keyring gnome-menus \
                     gnome-session gnome-settings-daemon gnome-shell \
-                    orca gnome-sushi  adwaita-icon-theme glib-networking \
+                    orca gnome-sushi adwaita-icon-theme glib-networking \
                     gsettings-desktop-schemas evince gnome-calculator \
                     gnome-calendar gnome-terminal gnome-software \
                     gnome-text-editor gnome-snapshot tecla loupe nautilus \
