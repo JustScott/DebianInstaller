@@ -5,7 +5,9 @@ declare -r BOOT_PARTITION="/dev/vda2"
 declare -r ROOT_PARTITION="/dev/vda3"
 declare -r HOME_PARTITION="/dev/vda4"
 declare -r OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
-declare -r KEYFILE_PARTITION=""
+
+declare -r ENCRYPT_SYSTEM='y' # or 'n'
+declare -r KEYFILE_PARTITION="" # leave empty if system not encrypted
 
 # Leave empty for no swap. Max is 32. Will have issues if swap is close
 # to root partition size

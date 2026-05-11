@@ -140,11 +140,22 @@ check_required_install_constants()
             "this is fatal...stopping"
         return 1
     fi
-    if [[ -z "$KEYFILE_PARTITION" ]]
+
+    if [[ -z "$ENCRYPT_SYSTEM" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
-            "[!] \$KEYFILE_PARTITION constant not set, this is fatal...stopping"
+            "[!] \$ENCRYPT_SYSTEM constant not set, this is fatal...stopping"
         return 1
+    fi
+
+    if [[ "$ENCRYPT_SYSTEM" == "y" ]]
+    then
+        if [[ -z "$KEYFILE_PARTITION" ]]
+        then
+            printf "\n\e[31m%s\e[0m\n" \
+                "[!] \$KEYFILE_PARTITION constant not set, this is fatal...stopping"
+            return 1
+        fi
     fi
 
     return 0
@@ -236,391 +247,483 @@ fi
 unset name
 unset user_password
 
-if ! [[ -b /dev/disk/by-label/keyfile_usb ]]
-then
-    echo 'y' | mkfs.fat -F 32 -n "keyfile_usb" $KEYFILE_PARTITION \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Format keyfile_usb partition with FAT32"
-    [[ $? -ne 0 ]] && exit 1
-fi
+configure_keyfile_usb()
+{
+    if ! [[ -b /dev/disk/by-label/keyfile_usb ]]
+    then
+        echo 'y' | mkfs.fat -F 32 -n "keyfile_usb" $KEYFILE_PARTITION \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Format keyfile_usb partition with FAT32"
+        [[ $? -ne 0 ]] && exit 1
+    fi
 
-if ! [[ -d /media/keyfile_usb ]]
-then
-    mount --mkdir /dev/disk/by-label/keyfile_usb /media/keyfile_usb \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Mount keyfile_usb partition"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    if ! [[ -d /media/keyfile_usb ]]
+    then
+        mount --mkdir /dev/disk/by-label/keyfile_usb /media/keyfile_usb \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Mount keyfile_usb partition"
+        [[ $? -ne 0 ]] && exit 1
+    fi
 
-if ! [[ -f /media/keyfile_usb/luks_keyfile ]]
-then
-    dd if=/dev/urandom of=/media/keyfile_usb/luks_keyfile bs=1024 count=2 \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Create luks_keyfile on keyfile_usb"
-    [[ $? -ne 0 ]] && exit 1
+    if ! [[ -f /media/keyfile_usb/luks_keyfile ]]
+    then
+        dd if=/dev/urandom of=/media/keyfile_usb/luks_keyfile bs=1024 count=2 \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Create luks_keyfile on keyfile_usb"
+        [[ $? -ne 0 ]] && exit 1
 
-    chmod 400 /media/keyfile_usb/luks_keyfile \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Set permissions on luks_keyfile (600)"
-    [[ $? -ne 0 ]] && exit 1
-fi
+        chmod 400 /media/keyfile_usb/luks_keyfile \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Set permissions on luks_keyfile (400)"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
 
-if ! grep "^luksFormatRoot$" $COMPLETION_FILE &>/dev/null
-then
-    cryptsetup luksFormat --key-file /media/keyfile_usb/luks_keyfile \
-        --batch-mode $ROOT_PARTITION \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "luksFormat $ROOT_PARTITION with USB keyfile"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "luksFormatRoot" >> $COMPLETION_FILE
-fi
-
-if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
-then
-    if ! grep "^luksFormatHome$" $COMPLETION_FILE &>/dev/null
+luks_format_home_and_root()
+{
+    if ! grep "^luksFormatRoot$" $COMPLETION_FILE &>/dev/null
     then
         cryptsetup luksFormat --key-file /media/keyfile_usb/luks_keyfile \
-            --batch-mode $HOME_PARTITION \
+            --batch-mode $ROOT_PARTITION \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "luksFormat $HOME_PARTITION with USB keyfile"
+        task_output $! "$STDERR_LOG_PATH" "luksFormat $ROOT_PARTITION with USB keyfile"
         [[ $? -ne 0 ]] && exit 1
 
-        echo "luksFormatHome" >> $COMPLETION_FILE
+        echo "luksFormatRoot" >> $COMPLETION_FILE
     fi
-fi
 
-if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
-then
-    cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
-        $ROOT_PARTITION crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "open luks encrypted root partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "luksOpenRoot" >> $COMPLETION_FILE
-fi
-
-if ! grep "^luksOpenHome$" $COMPLETION_FILE &>/dev/null
-then
-    cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
-        $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "open luks encrypted home partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "luksOpenHome" >> $COMPLETION_FILE
-fi
-
-if ! cmp -s ./DebianInstaller/configuration_files/sources.list \
-    /etc/apt/sources.list &>/dev/null
-then
-    cp ./DebianInstaller/configuration_files/sources.list /etc/apt/sources.list \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the current live system"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! cmp -s /usr/share/zoneinfo/America/Chicago /etc/localtime &>/dev/null
-then
-    ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Set live system timezone: 'America/Chicago'"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if [[ -n "$APT_CACHE_SERVER" && -n "$APT_CACHE_FILE" ]]
-then
-    if ! grep "Acquire::http::Proxy \"$APT_CACHE_SERVER\";"\
-        $APT_CACHE_FILE &>/dev/null
+    if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
     then
-        echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" \
-            > $APT_CACHE_FILE &
+        if ! grep "^luksFormatHome$" $COMPLETION_FILE &>/dev/null
+        then
+            cryptsetup luksFormat --key-file /media/keyfile_usb/luks_keyfile \
+                --batch-mode $HOME_PARTITION \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "luksFormat $HOME_PARTITION with USB keyfile"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "luksFormatHome" >> $COMPLETION_FILE
+        fi
+    fi
+}
+
+luks_open_home_and_root()
+{
+    if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
+    then
+        cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+            $ROOT_PARTITION crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "open luks encrypted root partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksOpenRoot" >> $COMPLETION_FILE
+    fi
+
+    if ! grep "^luksOpenHome$" $COMPLETION_FILE &>/dev/null
+    then
+        cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+            $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "open luks encrypted home partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksOpenHome" >> $COMPLETION_FILE
+    fi
+}
+
+format_partitions()
+{
+    local home_partition="$1"
+    local root_partition="$2"
+
+    if ! grep "^mkfs_efi$" $COMPLETION_FILE &>/dev/null
+    then
+        echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Format EFI partition with FAT32"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mkfs_efi" >> $COMPLETION_FILE
+    fi
+
+    if ! grep "^mkfs_boot$" $COMPLETION_FILE &>/dev/null
+    then
+        echo 'y' | mkfs.ext4 $BOOT_PARTITION \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Format boot partition with ext4"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mkfs_boot" >> $COMPLETION_FILE
+    fi
+
+    if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
+    then
+        if ! grep "^mkfs_home$" $COMPLETION_FILE &>/dev/null
+        then
+            echo 'y' | mkfs.ext4 "$home_partition" \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Format home partition with EXT4"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "mkfs_home" >> $COMPLETION_FILE
+        fi
+    fi
+
+    if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
+    then
+        echo 'y' | mkfs.ext4 "$root_partition" \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Format root partition with EXT4"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mkfs_root" >> $COMPLETION_FILE
+    fi
+}
+
+mount_partitions()
+{
+    local home_partition="$1"
+    local root_partition="$2"
+
+    if ! grep "^mount_root$" $COMPLETION_FILE &>/dev/null
+    then
+        mount "$root_partition" /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Mount the root partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mount_root" >> $COMPLETION_FILE
+    fi
+
+    if ! grep "^mount_home$" $COMPLETION_FILE &>/dev/null
+    then
+        mount --mkdir "$home_partition" /mnt/home \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Mount the home partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mount_home" >> $COMPLETION_FILE
+    fi
+
+    if ! grep "^mount_boot$" $COMPLETION_FILE &>/dev/null
+    then
+        mount --mkdir $BOOT_PARTITION /mnt/boot \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Mount the boot partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mount_boot" >> $COMPLETION_FILE
+    fi
+
+    if ! grep "^mount_efi$" $COMPLETION_FILE &>/dev/null
+    then
+        mount --mkdir $EFI_PARTITION /mnt/boot/efi \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Mount the efi partition"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "mount_efi" >> $COMPLETION_FILE
+    fi
+}
+
+populate_crypttab()
+{
+    ENCRYPTED_ROOT_PARTITION_UUID="$(blkid -s UUID -o value $ROOT_PARTITION)"
+    ENCRYPTED_HOME_PARTITION_UUID="$(blkid -s UUID -o value $HOME_PARTITION)"
+
+    if [[ -z "$ENCRYPTED_ROOT_PARTITION_UUID" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] Couldn't find encrypted root partition in blkid output"
+        exit 1
+    fi
+
+    if [[ -z "$ENCRYPTED_HOME_PARTITION_UUID" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] Couldn't find encrypted home partition in blkid output"
+        exit 1
+    fi
+
+    if ! [[ -d /mnt/etc/ ]]
+    then
+        mkdir -p /mnt/etc 1>/dev/null 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Create /mnt/etc for crypttab"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+
+    if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
+    then
+        echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=/lib/cryptsetup/scripts/passdev,tries=2" \
+            > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+
+    if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
+    then
+        echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=/lib/cryptsetup/scripts/passdev,tries=2,initramfs" \
+            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
+
+configure_swap()
+{
+    if [[ -n "$SWAP_SIZE_IN_GB" ]]
+    then
+        if ! [[ "$SWAP_SIZE_IN_GB" =~ ^[1-9][0-9]*$ ]]
+        then
+            printf "\n\e[31m%s\e[0m\n" "[!] Invalid swap size: '$SWAP_SIZE_IN_GB'"
+            exit 1
+        fi
+
+        if [[ "$SWAP_SIZE_IN_GB" -gt 32 ]]
+        then
+            printf "\n\e[31m%s\e[0m\n" "[!] Max swap size is 32GB"
+            exit 1
+        fi
+
+        if ! grep "^mkswap$" $COMPLETION_FILE &>/dev/null
+        then
+            mkswap -U clear --size ${SWAP_SIZE_IN_GB}G --file /mnt/swapfile \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Create ${SWAP_SIZE_IN_GB}GB swapfile"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "mkswap" >> $COMPLETION_FILE
+        fi
+
+        if ! grep "^swapon$" $COMPLETION_FILE &>/dev/null
+        then
+            swapon /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Enable the swapfile"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "swapon" >> $COMPLETION_FILE
+        fi
+    fi
+}
+
+set_timezone()
+{
+    local user_timezone="$1"
+
+    if [[ -z "$user_timezone" ]]
+    then
+        printf "\n\e[31m%s\e[0m %s\n" "[Error]" \
+            "No user timezone passed to function, this shouldn't happen. Stopping."
+        exit 1
+    fi
+
+    if ! cmp -s "/usr/share/zoneinfo/${user_timezone}" /etc/localtime &>/dev/null
+    then
+        ln -sf "/usr/share/zoneinfo/${user_timezone}" /etc/localtime \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Set live system timezone: '$user_timezone'"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
+
+set_apt_cache_server()
+{
+    if [[ -n "$APT_CACHE_SERVER" && -n "$APT_CACHE_FILE" ]]
+    then
+        if ! grep "Acquire::http::Proxy \"$APT_CACHE_SERVER\";"\
+            $APT_CACHE_FILE &>/dev/null
+        then
+            echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" \
+                > $APT_CACHE_FILE &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Use apt proxy server '$APT_CACHE_SERVER'"
+            [[ $? -ne 0 ]] && exit 1
+        fi
+
+        if ! apt-config dump | grep "Proxy" &>/dev/null
+        then
+            printf "\n\n\e[31m%s %s\e[0m\n\n" \
+                "[!] The apt proxy isn't set up correctly. This shouldn't" \
+                "happen...stopping"
+            exit 1
+        fi
+    fi
+}
+
+copy_apt_sources_to_live_system()
+{
+    if ! cmp -s ./DebianInstaller/configuration_files/sources.list \
+        /etc/apt/sources.list &>/dev/null
+    then
+        cp ./DebianInstaller/configuration_files/sources.list /etc/apt/sources.list \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the current live system"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
+
+apt_update()
+{
+    if ! grep "^apt_update$" $COMPLETION_FILE &>/dev/null
+    then
+        apt-get update >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Update apt"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "apt_update" >> $COMPLETION_FILE
+    fi
+}
+
+install_deboostrap()
+{
+    if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
+    then
+        apt-get install --yes arch-install-scripts debootstrap \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "Use apt proxy server '$APT_CACHE_SERVER'"
+            "Install arch-install-scripts and debootstrap"
         [[ $? -ne 0 ]] && exit 1
+
+        echo "apt_install_debootstrap" >> $COMPLETION_FILE
     fi
+}
 
-    if ! apt-config dump | grep "Proxy" &>/dev/null
+run_debootstrap()
+{
+    if ! grep "^run_debootstrap$" $COMPLETION_FILE &>/dev/null
     then
-        printf "\n\n\e[31m%s %s\e[0m\n\n" \
-            "[!] The apt proxy isn't set up correctly. This shouldn't" \
-            "happen...stopping"
-        exit 1
+        if [[ -n "$APT_CACHE_SERVER" ]]
+        then
+            debootstrap --arch amd64 --include=curl stable /mnt \
+                $APT_CACHE_SERVER/deb.debian.org/debian \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Run debootstrap (this could take a while on slow internet)"
+            [[ $? -ne 0 ]] && exit 1
+        else
+            debootstrap --arch amd64 stable /mnt https://deb.debian.org/debian \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Run debootstrap (this could take a while on slow internet)"
+            [[ $? -ne 0 ]] && exit 1
+        fi
+
+        echo "run_debootstrap" >> $COMPLETION_FILE
     fi
-fi
+}
 
-if ! grep "^apt_update$" $COMPLETION_FILE &>/dev/null
-then
-    apt-get update >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Update apt"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "apt_update" >> $COMPLETION_FILE
-fi
-
-if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
-then
-    apt-get install --yes arch-install-scripts debootstrap \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" \
-        "Install arch-install-scripts and debootstrap"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "apt_install_debootstrap" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mkfs_efi$" $COMPLETION_FILE &>/dev/null
-then
-    echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Format EFI partition with FAT32"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mkfs_efi" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mkfs_boot$" $COMPLETION_FILE &>/dev/null
-then
-    echo 'y' | mkfs.ext4 $BOOT_PARTITION \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Format boot partition with ext4"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mkfs_boot" >> $COMPLETION_FILE
-fi
-
-if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
-then
-    if ! grep "^mkfs_home$" $COMPLETION_FILE &>/dev/null
+generate_fstab_file()
+{
+    if ! grep "^genfstab$" $COMPLETION_FILE &>/dev/null
     then
-        echo 'y' | mkfs.ext4 /dev/mapper/crypt_home \
+        genfstab -U /mnt > /mnt/etc/fstab 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Generate the fstab file"
+        if [[ $? -ne 0 ]]
+        then
+            printf "\n\n\e[31m%s\n%s\n%s\e[0m\n\n" \
+                "[!] It's likely debootstrap failed, and not genfstab" \
+                "     - try removing 'debootstrap' from the completion" \
+                "       file and running again"
+            exit 1
+        fi
+
+        echo "genfstab" >> $COMPLETION_FILE
+    fi
+}
+
+set_hostname()
+{
+    if ! grep "^set_hostname$" $COMPLETION_FILE &>/dev/null
+    then
+        echo "debian" > /mnt/etc/hostname &
+        task_output $! "$STDERR_LOG_PATH" "Set the hostname to 'debian'"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo -e "127.0.0.1 localhost\n127.0.1.1 debian" > /mnt/etc/hosts &
+        task_output $! "$STDERR_LOG_PATH" "Populate the '/etc/hosts' file"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "set_hostname" >> $COMPLETION_FILE
+    fi
+}
+
+copy_necessary_project_files_to_new_system()
+{
+    if ! cmp -s ./DebianInstaller/configuration_files/sources.list \
+        /mnt/etc/apt/sources.list &>/dev/null
+    then
+        cp ./DebianInstaller/configuration_files/sources.list \
+            /mnt/etc/apt/sources.list \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Format home partition with EXT4"
+        task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the new system"
         [[ $? -ne 0 ]] && exit 1
-
-        echo "mkfs_home" >> $COMPLETION_FILE
-    fi
-fi
-
-if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
-then
-    echo 'y' | mkfs.ext4 /dev/mapper/crypt_root \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Format root partition with EXT4"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mkfs_root" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mount_root$" $COMPLETION_FILE &>/dev/null
-then
-    mount /dev/mapper/crypt_root /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Mount the root partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mount_root" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mount_home$" $COMPLETION_FILE &>/dev/null
-then
-    mount --mkdir /dev/mapper/crypt_home /mnt/home \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Mount the home partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mount_home" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mount_boot$" $COMPLETION_FILE &>/dev/null
-then
-    mount --mkdir $BOOT_PARTITION /mnt/boot \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Mount the boot partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mount_boot" >> $COMPLETION_FILE
-fi
-
-if ! grep "^mount_efi$" $COMPLETION_FILE &>/dev/null
-then
-    mount --mkdir $EFI_PARTITION /mnt/boot/efi \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Mount the efi partition"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "mount_efi" >> $COMPLETION_FILE
-fi
-
-if [[ -n "$SWAP_SIZE_IN_GB" ]]
-then
-    if ! [[ "$SWAP_SIZE_IN_GB" =~ ^[1-9][0-9]*$ ]]
-    then
-        printf "\n\e[31m%s\e[0m\n" "[!] Invalid swap size: '$SWAP_SIZE_IN_GB'"
-        exit 1
     fi
 
-    if [[ "$SWAP_SIZE_IN_GB" -gt 32 ]]
+    if ! cmp -s $PRETTY_OUTPUT_LIBRARY \
+        /mnt/$(basename $PRETTY_OUTPUT_LIBRARY) &>/dev/null
     then
-        printf "\n\e[31m%s\e[0m\n" "[!] Max swap size is 32GB"
-        exit 1
-    fi
-
-    if ! grep "^mkswap$" $COMPLETION_FILE &>/dev/null
-    then
-        mkswap -U clear --size ${SWAP_SIZE_IN_GB}G --file /mnt/swapfile \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Create ${SWAP_SIZE_IN_GB}GB swapfile"
-        [[ $? -ne 0 ]] && exit 1
-
-        echo "mkswap" >> $COMPLETION_FILE
-    fi
-
-    if ! grep "^swapon$" $COMPLETION_FILE &>/dev/null
-    then
-        swapon /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Enable the swapfile"
-        [[ $? -ne 0 ]] && exit 1
-
-        echo "swapon" >> $COMPLETION_FILE
-    fi
-fi
-
-if ! grep "^run_debootstrap$" $COMPLETION_FILE &>/dev/null
-then
-    if [[ -n "$APT_CACHE_SERVER" ]]
-    then
-        debootstrap --arch amd64 --include=curl stable /mnt \
-            $APT_CACHE_SERVER/deb.debian.org/debian \
+        cp $PRETTY_OUTPUT_LIBRARY /mnt/ \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "Run debootstrap (this could take a while on slow internet)"
+            "Copy '$PRETTY_OUTPUT_LIBRARY' to the new system"
         [[ $? -ne 0 ]] && exit 1
-    else
-        debootstrap --arch amd64 stable /mnt https://deb.debian.org/debian \
+    fi
+
+    if ! cmp -s ./DebianInstaller/finish_install.sh /mnt/finish_install.sh &>/dev/null
+    then
+        cp ./DebianInstaller/finish_install.sh /mnt \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "Run debootstrap (this could take a while on slow internet)"
+            "Copy 'finish_install.sh' to the new system"
         [[ $? -ne 0 ]] && exit 1
     fi
 
-    echo "run_debootstrap" >> $COMPLETION_FILE
-fi
-
-if ! grep "^genfstab$" $COMPLETION_FILE &>/dev/null
-then
-    genfstab -U /mnt > /mnt/etc/fstab 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Generate the fstab file"
-    if [[ $? -ne 0 ]]
+    if ! cmp -s $INSTALLATION_VARIABLES_FILE \
+        /mnt/$(basename $INSTALLATION_VARIABLES_FILE) &>/dev/null
     then
-        printf "\n\n\e[31m%s\n%s\n%s\e[0m\n\n" \
-            "[!] It's likely debootstrap failed, and not genfstab" \
-            "     - try removing 'debootstrap' from the completion" \
-            "       file and running again"
-        exit 1
+        cp $INSTALLATION_VARIABLES_FILE /mnt/ \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Copy '$INSTALLATION_VARIABLES_FILE' to the new system"
+        [[ $? -ne 0 ]] && exit 1
     fi
 
-    echo "genfstab" >> $COMPLETION_FILE
-fi
+    if ! cmp -s $INSTALL_CONSTANTS_FILE \
+        /mnt/$(basename $INSTALL_CONSTANTS_FILE) &>/dev/null
+    then
+        cp $INSTALL_CONSTANTS_FILE /mnt/ \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Copy '$INSTALL_CONSTANTS_FILE' to the new system"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
 
-ENCRYPTED_ROOT_PARTITION_UUID="$(blkid -s UUID -o value $ROOT_PARTITION)"
-ENCRYPTED_HOME_PARTITION_UUID="$(blkid -s UUID -o value $HOME_PARTITION)"
-
-if [[ -z "$ENCRYPTED_ROOT_PARTITION_UUID" ]]
+if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
-    printf "\n\e[31m%s\e[0m\n" \
-        "[!] Couldn't find encrypted root partition in blkid output"
-    exit 1
-fi
+    configure_keyfile_usb
+    luks_format_home_and_root
+    luks_open_home_and_root
+    format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
+    format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
 
-if [[ -z "$ENCRYPTED_HOME_PARTITION_UUID" ]]
+    populate_crypttab
+elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
 then
-    printf "\n\e[31m%s\e[0m\n" \
-        "[!] Couldn't find encrypted home partition in blkid output"
-    exit 1
+    format_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
+    mount_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
+else
+    printf "" "[Error]" \
+        "\$ENCRYPT_SYSTEM variable in install_constants must be set to 'y' or 'n'"
 fi
 
-if ! [[ -d /mnt/etc/ ]]
-then
-    mkdir -p /mnt/etc 1>/dev/null 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Create /mnt/etc for crypttab"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
-then
-    echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=/lib/cryptsetup/scripts/passdev,tries=2" \
-        > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
-then
-    echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=/lib/cryptsetup/scripts/passdev,tries=2,initramfs" \
-        >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! cmp -s ./DebianInstaller/configuration_files/sources.list \
-    /mnt/etc/apt/sources.list &>/dev/null
-then
-    cp ./DebianInstaller/configuration_files/sources.list \
-        /mnt/etc/apt/sources.list \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the new system"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! grep "^set_hostname$" $COMPLETION_FILE &>/dev/null
-then
-    echo "debian" > /mnt/etc/hostname &
-    task_output $! "$STDERR_LOG_PATH" "Set the hostname to 'debian'"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo -e "127.0.0.1 localhost\n127.0.1.1 debian" > /mnt/etc/hosts &
-    task_output $! "$STDERR_LOG_PATH" "Populate the '/etc/hosts' file"
-    [[ $? -ne 0 ]] && exit 1
-
-    echo "set_hostname" >> $COMPLETION_FILE
-fi
-
-if ! cmp -s $PRETTY_OUTPUT_LIBRARY \
-    /mnt/$(basename $PRETTY_OUTPUT_LIBRARY) &>/dev/null
-then
-    cp $PRETTY_OUTPUT_LIBRARY /mnt/ \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" \
-        "Copy '$PRETTY_OUTPUT_LIBRARY' to the new system"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! cmp -s ./DebianInstaller/finish_install.sh /mnt/finish_install.sh &>/dev/null
-then
-    cp ./DebianInstaller/finish_install.sh /mnt \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" \
-        "Copy 'finish_install.sh' to the new system"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! cmp -s $INSTALLATION_VARIABLES_FILE \
-    /mnt/$(basename $INSTALLATION_VARIABLES_FILE) &>/dev/null
-then
-    cp $INSTALLATION_VARIABLES_FILE /mnt/ \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" \
-        "Copy '$INSTALLATION_VARIABLES_FILE' to the new system"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-if ! cmp -s $INSTALL_CONSTANTS_FILE \
-    /mnt/$(basename $INSTALL_CONSTANTS_FILE) &>/dev/null
-then
-    cp $INSTALL_CONSTANTS_FILE /mnt/ \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" \
-        "Copy '$INSTALL_CONSTANTS_FILE' to the new system"
-    [[ $? -ne 0 ]] && exit 1
-fi
+configure_swap
+set_timezone "America/Chicago"
+set_apt_cache_server
+copy_apt_sources_to_live_system
+apt_update
+install_deboostrap
+run_debootstrap
+generate_fstab_file
+set_hostname
+copy_necessary_project_files_to_new_system
 
 arch-chroot /mnt /bin/bash finish_install.sh

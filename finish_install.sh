@@ -261,16 +261,19 @@ then
     echo "generate_locale" >> $COMPLETION_FILE
 fi
 
-{
-    add_initramfs_module "usb_storage"
-    add_initramfs_module "usbhid"
-    add_initramfs_module "hid_generic"
-    add_initramfs_module "nls_cp437"
-    add_initramfs_module "nls_utf8"
-    add_initramfs_module "nls_ascii"
-} >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-task_output $! "$STDERR_LOG_PATH" "Add modules to initramfs for USB decryption"
-[[ $? -ne 0 ]] && exit 1
+if [[ "$ENCRYPT_SYSTEM" == "y" ]]
+then
+    {
+        add_initramfs_module "usb_storage"
+        add_initramfs_module "usbhid"
+        add_initramfs_module "hid_generic"
+        add_initramfs_module "nls_cp437"
+        add_initramfs_module "nls_utf8"
+        add_initramfs_module "nls_ascii"
+    } >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" "Add modules to initramfs for USB decryption"
+    [[ $? -ne 0 ]] && exit 1
+fi
 
 if ! grep "^configure_grub$" $COMPLETION_FILE &>/dev/null
 then
@@ -280,16 +283,6 @@ then
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Configure Grub"
         [[ $? -ne 0 ]] && exit 1
-    fi
-
-    LUKS_DEVICE_UUID="$(blkid -s UUID -o value $ROOT_PARTITION)"
-
-    if [[ -z "$LUKS_DEVICE_UUID" ]]
-    then
-        printf "\n\e[31m%s\e[0m\n" \
-            "[!] Cannot get the UUID of '$ROOT_PARTITION'." \
-            "This is fatal... stopping"
-        exit 1
     fi
 
     if ! grep "^GRUB_CMDLINE_LINUX_DEFAULT" /etc/default/grub &>/dev/null
