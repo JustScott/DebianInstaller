@@ -435,7 +435,9 @@ then
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Clone DebianPreset to administrator's \$HOME"
-    elif [[ -d /home/administrator/DebianPreset ]]
+    fi
+
+    if [[ -d /home/administrator/DebianPreset ]]
     then
         chown administrator:administrator -R /home/administrator/DebianPreset
     fi
@@ -446,18 +448,19 @@ else
     exit 1
 fi
 
-if [[ -d "/home/$username" ]]
+if [[ -d "/home/${username}" ]]
 then
-    if ! [[ -d /home/$username/DebianPreset ]]
+    if ! [[ -d "/home/${username}/DebianPreset" ]]
     then
         cd /home/$username
         git clone https://www.github.com/JustScott/DebianPreset \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Clone DebianPreset to $username's \$HOME"
-    elif [[ -d /home/$username/DebianPreset ]]
+    fi
+    if [[ -d "/home/${username}/DebianPreset" ]]
     then
-        chown $username:$username -R /home/$username/DebianPreset
+        chown $username:$username -R "/home/${username}/DebianPreset"
     fi
 else
     printf "\n\e[31m%s %s\e[0m\n" \
