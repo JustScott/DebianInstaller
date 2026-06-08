@@ -704,6 +704,7 @@ then
     luks_open_home_and_root
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
+    mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
 
     populate_crypttab
 elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
