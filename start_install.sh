@@ -349,7 +349,7 @@ format_partitions()
     then
         echo 'y' | mkfs.ext4 $BOOT_PARTITION \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Format boot partition with ext4"
+        task_output $! "$STDERR_LOG_PATH" "Format boot partition with EXT4"
         [[ $? -ne 0 ]] && exit 1
 
         echo "mkfs_boot" >> $COMPLETION_FILE
