@@ -540,7 +540,7 @@ enable_systemd_services()
     fi
 }
 
-add_apt_proxy_if_enabled()
+add_apt_proxy_if_enabled
 update_apt
 
 debconf-set-selections > /dev/null 2>&1 <<EOF

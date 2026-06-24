@@ -1,16 +1,15 @@
-# Recommended Partition Sizes:
-#   - 1GB EFI, 1GB Boot, atleast 10GB Root, remaining Home
-declare -r EFI_PARTITION="/dev/vda1"
-declare -r BOOT_PARTITION="/dev/vda2"
-declare -r ROOT_PARTITION="/dev/vda3"
-declare -r HOME_PARTITION="/dev/vda4"
+# Manually partition with cfdisk, then update partition names here
+declare -r EFI_PARTITION="/dev/vda1"   # 1GB (EFI system)
+declare -r BOOT_PARTITION="/dev/vda2"  # 1GB (Linux filesystem)
+declare -r ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system packages (Linux filesystem)
+declare -r HOME_PARTITION="/dev/vda4"  # Remaining space for user packages (Linux filesystem)
 declare -r OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
 
-declare -r ENCRYPT_SYSTEM='y' # or 'n'
-declare -r KEYFILE_PARTITION="" # leave empty if system not encrypted
+# Choose only one method, leave both empty for no encryption
+declare -r LUKS_KEYFILE_PARTITION=""
+declare -r LUKS_PASSWORD=""
 
-# Leave empty for no swap. Max is 32. Will have issues if swap is close
-# to root partition size
+# Leave empty for no swap. Uses root partition space, so be mindful of size
 declare -r SWAP_SIZE_IN_GB='4'
 
 # Useful in large deployments, change value accordingly
