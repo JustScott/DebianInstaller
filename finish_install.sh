@@ -274,7 +274,7 @@ configure_locale()
 
 encrypt_system_if_set()
 {
-    if [[ "$ENCRYPT_SYSTEM" == "y" ]]
+    if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
         {
             add_initramfs_module "usb_storage"
