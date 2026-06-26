@@ -29,9 +29,6 @@ COMPLETION_FILE=./start_install_completion.txt
 
 INSTALL_CONSTANTS_FILE=./DebianInstaller/install_constants
 
-NEW_KEYFILE_PATH="/home_keyfile"
-HOME_KEYFILE_PATH="/mnt/etc/urandom_noise"
-
 export DEBIAN_FRONTEND=noninteractive
 
 if ! source $INSTALL_CONSTANTS_FILE &>/dev/null
@@ -240,7 +237,7 @@ fi
 unset name
 unset user_password
 
-create_root_keyfile_on_usb()
+create_luks_keyfile_on_usb()
 {
     if ! [[ -b /dev/disk/by-label/keyfile_usb ]]
     then
@@ -272,49 +269,6 @@ create_root_keyfile_on_usb()
     fi
 }
 
-# Systems encrypted with passphrase instead of USB with keyfiles
-#   * /home still needs to be encrypted with a keyfile to avoid typing the
-#     luks passphrase twice
-create_home_keyfile()
-{
-    if ! [[ -f "$HOME_KEYFILE_PATH" ]]
-    then
-        dd if=/dev/urandom of=$NEW_KEYFILE_PATH bs=1024 count=2 \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Create luks keyfile for home partition"
-        [[ $? -ne 0 ]] && exit 1
-    fi
-}
-
-move_home_keyfile_to_new_system()
-{
-    if ! [[ -s "$HOME_KEYFILE_PATH" ]]
-    then
-        if ! [[ -d /mnt/etc/ ]]
-        then
-            mkdir -p /mnt/etc 1>/dev/null 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Create /mnt/etc for home keyfile"
-            [[ $? -ne 0 ]] && exit 1
-        fi
-
-        mv "$NEW_KEYFILE_PATH" "$HOME_KEYFILE_PATH" \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Move home keyfile onto new system"
-        [[ $? -ne 0 ]] && exit 1
-    fi
-
-    if [[ "$(stat -c '%a' $HOME_KEYFILE_PATH)" != "400" ]]
-    then
-        chmod 400 "$HOME_KEYFILE_PATH" \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Set permissions on keyfile (400)"
-        [[ $? -ne 0 ]] && exit 1
-    fi
-
-    return 0
-}
-
 luks_format_root_with_keyfile()
 {
     if ! grep "^luksFormatRootWithKeyfile$" $COMPLETION_FILE &>/dev/null
@@ -326,6 +280,22 @@ luks_format_root_with_keyfile()
         [[ $? -ne 0 ]] && exit 1
 
         echo "luksFormatRootWithKeyfile" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
+luks_format_home_with_keyfile()
+{
+    if ! grep "^luksFormatHomeWithKeyfile$" $COMPLETION_FILE &>/dev/null
+    then
+        cryptsetup luksFormat --key-file /media/keyfile_usb/luks_keyfile \
+            --batch-mode $HOME_PARTITION \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "luksFormat home ($HOME_PARTITION) with USB keyfile"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksFormatHomeWithKeyfile" >> $COMPLETION_FILE
     fi
 
     return 0
@@ -352,19 +322,22 @@ luks_format_root_with_passphrase() {
     return 0
 }
 
-luks_format_home() {
-    if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
+luks_format_home_with_passphrase() {
+    if [[ -z "$LUKS_PASSWORD" ]]
     then
-        if ! grep "^luksFormatHome$" $COMPLETION_FILE &>/dev/null
-        then
-            cryptsetup luksFormat --key-file="$NEW_KEYFILE_PATH" \
-                --batch-mode $HOME_PARTITION \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "luksFormat home ($HOME_PARTITION) with keyfile"
-            [[ $? -ne 0 ]] && exit 1
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "Luks password not set in 'install_constants' file"
+        exit 1
+    fi
 
-            echo "luksFormatHome" >> $COMPLETION_FILE
-        fi
+    if ! grep "^luksFormatHomeWithPassphrase$" $COMPLETION_FILE &>/dev/null
+    then
+        echo -n "$LUKS_PASSWORD" | cryptsetup luksFormat -s 512 -h sha512 \
+            --key-file=- $HOME_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "luksFormat home ($HOME_PARTITION) with passphrase"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksFormatHomeWithPassphrase" >> $COMPLETION_FILE
     fi
 
     return 0
@@ -397,10 +370,20 @@ luks_open_home()
 {
     if ! grep "^luksOpenHome$" $COMPLETION_FILE &>/dev/null
     then
-        cryptsetup open --key-file="$NEW_KEYFILE_PATH" \
-            $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "open luks encrypted home partition"
-        [[ $? -ne 0 ]] && exit 1
+        if [[ -n "$LUKS_PASSWORD" ]]
+        then
+            echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
+                crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted home partition with passphrase"
+            [[ $? -ne 0 ]] && exit 1
+        else
+            cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+                $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted home partition with USB keyfile"
+            [[ $? -ne 0 ]] && exit 1
+        fi
 
         echo "luksOpenHome" >> $COMPLETION_FILE
     fi
@@ -530,13 +513,13 @@ populate_crypttab()
     then
         if [[ -n "$LUKS_PASSWORD" ]]
         then
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard" \
-            > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
         else
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=/lib/cryptsetup/scripts/passdev,tries=2" \
-            > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
         fi
@@ -544,10 +527,18 @@ populate_crypttab()
 
     if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
     then
-        echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID $HOME_KEYFILE_PATH luks,discard" \
+        if [[ -n "$LUKS_PASSWORD" ]]
+        then
+            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
             >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-        [[ $? -ne 0 ]] && exit 1
+            task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && exit 1
+        else
+            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && exit 1
+        fi
     fi
 }
 
@@ -656,7 +647,7 @@ apt_update()
     fi
 }
 
-install_deboostrap()
+install_debootstrap()
 {
     if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
     then
@@ -785,11 +776,13 @@ if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
-        create_root_keyfile_on_usb
+        create_luks_keyfile_on_usb
         luks_format_root_with_keyfile
+        luks_format_home_with_keyfile
     elif [[ -n "$LUKS_PASSWORD" ]]
     then
         luks_format_root_with_passphrase
+        luks_format_home_with_passphrase
     else
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "LUKS_PASSWORD or LUKS_KEYFILE_PARTITION were empty. This shouldn't happen."
@@ -797,15 +790,11 @@ then
     fi
 
     luks_open_root
-    create_home_keyfile
-    luks_format_home
     luks_open_home
 
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
-
-    move_home_keyfile_to_new_system
 
     populate_crypttab
 elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
@@ -822,7 +811,7 @@ set_timezone "America/Chicago"
 set_apt_cache_server
 copy_apt_sources_to_live_system
 apt_update
-install_deboostrap
+install_debootstrap
 run_debootstrap
 generate_fstab_file
 set_hostname

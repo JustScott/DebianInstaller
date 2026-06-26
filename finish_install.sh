@@ -96,6 +96,13 @@ then
     exit 1
 fi
 
+if [[ -n "$LUKS_PASSWORD" || -n "$LUKS_KEYFILE_PARTITION" ]]
+then
+    declare -r ENCRYPT_SYSTEM='y'
+else
+    declare -r ENCRYPT_SYSTEM='n'
+fi
+
 add_apt_proxy_if_enabled()
 {
     if [[ -n "$APT_CACHE_SERVER" && -n "$APT_CACHE_FILE" ]]
@@ -232,7 +239,7 @@ install_general_system_packages()
             locales neovim curl wget git unattended-upgrades sudo \
             linux-image-amd64 grub-efi-amd64-bin \
             cryptsetup cryptsetup-initramfs \
-            efibootmgr efivar \
+            efibootmgr efivar keyutils \
             network-manager wpasupplicant \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
