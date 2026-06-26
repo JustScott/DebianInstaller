@@ -17,6 +17,11 @@
 
 PRETTY_OUTPUT_LIBRARY=./DebianInstaller/pretty_output_library.sh
 
+INSTALL_CONSTANTS_FILE=/mnt/install_constants
+INSTALLATION_VARIABLES_FILE=/mnt/activate_installation_variables.sh
+COMPLETION_FILE=/mnt/finish_install_completion.txt
+FINISH_INSTALL_SCRIPT=/mnt/finish_install.sh
+
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
     printf "\n\n\e[31m%s %s\e[0m\n\n" \
@@ -25,55 +30,111 @@ then
     exit 1
 fi
 
-if swapon --show | grep "/swapfile" &>/dev/null
-then
-    swapoff /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Turn of system swap"
-    [[ $? -ne 0 ]] && exit 1
-fi
+remove_sensitive_files()
+{
+    if [[ -f "$INSTALL_CONSTANTS_FILE" ]]
+    then
+        rm $INSTALL_CONSTANTS_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $INSTALL_CONSTANTS_FILE"
+        [[ $? -ne 0 ]] && return 1
+    fi
 
+    if [[ -f "$INSTALLATION_VARIABLES_FILE" ]]
+    then
+        rm $INSTALLATION_VARIABLES_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $INSTALLATION_VARIABLES_FILE"
+        [[ $? -ne 0 ]] && return 1
+    fi
 
-if lsblk | grep "/mnt/boot/efi" &>/dev/null
-then
-    umount -R /mnt/boot/efi >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Umount /mnt/boot/efi"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    if [[ -f "$COMPLETION_FILE" ]]
+    then
+        rm $COMPLETION_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $COMPLETION_FILE"
+        [[ $? -ne 0 ]] && return 1
+    fi
 
-if lsblk | grep "/mnt/boot" &>/dev/null
-then
-    umount -R /mnt/boot >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Umount /mnt/boot"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    if [[ -f "$FINISH_INSTALL_SCRIPT" ]]
+    then
+        rm $FINISH_INSTALL_SCRIPT >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $FINISH_INSTALL_SCRIPT"
+        [[ $? -ne 0 ]] && return 1
+    fi
 
-if lsblk | grep "/mnt/home" &>/dev/null
-then
-    umount -R /mnt/home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Umount /mnt/home"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    return 0
+}
 
-if lsblk | grep "/mnt" &>/dev/null
-then
-    umount -R /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Umount /mnt"
-    [[ $? -ne 0 ]] && exit 1
-fi
+shutoff_swapfile()
+{
+    if swapon --show | grep "/swapfile" &>/dev/null
+    then
+        swapoff /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Turn of system swap"
+        [[ $? -ne 0 ]] && return 1
+    fi
 
-if lsblk | grep "crypt_root" &>/dev/null
-then
-    cryptsetup close crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "close crypt_root"
-    [[ $? -ne 0 ]] && exit 1
-fi
+    return 0
+}
 
-if lsblk | grep "crypt_home" &>/dev/null
-then
-    cryptsetup close crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "close crypt_home"
-    [[ $? -ne 0 ]] && exit 1
-fi
+unmount_system()
+{
+    if lsblk | grep "/mnt/boot/efi" &>/dev/null
+    then
+        umount -R /mnt/boot/efi >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Umount /mnt/boot/efi"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if lsblk | grep "/mnt/boot" &>/dev/null
+    then
+        umount -R /mnt/boot >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Umount /mnt/boot"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if lsblk | grep "/mnt/home" &>/dev/null
+    then
+        umount -R /mnt/home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Umount /mnt/home"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if lsblk | grep "/mnt" &>/dev/null
+    then
+        umount -R /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Umount /mnt"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    return 0
+}
+
+close_encrypted_partitions()
+{
+    if lsblk | grep "crypt_root" &>/dev/null
+    then
+        cryptsetup close crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "close crypt_root"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if lsblk | grep "crypt_home" &>/dev/null
+    then
+        cryptsetup close crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "close crypt_home"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    return 0
+}
+
+remove_sensitive_files || exit 1
+shutoff_swapfile || exit 1
+unmount_system || exit 1
+close_encrypted_partitions || exit 1
 
 echo ""
 # Gives the user so many seconds to cancel the shutdown 
