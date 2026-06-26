@@ -47,60 +47,6 @@ then
     exit 1
 fi
 
-{
-    get_name() {
-        declare -g name=""
-        local name_verify
-
-        while : 
-        do
-            read -p 'Enter Name: ' name
-            read -p 'Verify Name: ' name_verify
-
-            if [[ -z "$name" ]]
-            then
-                clear
-                echo -e " - Name Can't Be Empty - \n"
-                continue
-            fi
-
-            if [[ $name == $name_verify ]]
-            then
-                clear
-                echo -e " - Set as '$name' - \n"
-                sleep .5
-                break
-            else 
-                clear
-                echo -e " - Names Don't Match - \n"
-            fi
-        done
-    }
-
-    get_user_password() {
-        declare -g user_password=""
-        local user_password_verify
-
-        echo -e "\n - Set Password for '$1' - "
-        while :
-        do
-            read -s -p 'Set Password: ' user_password
-            read -s -p $'\nverify Password: ' user_password_verify
-
-            if [[ $user_password == $user_password_verify ]]
-            then
-                clear
-                echo -e " - Set password for $1! - \n"
-                sleep 1
-                break
-            else
-                clear
-                echo -e " - Passwords Don't Match - \n"
-            fi
-        done
-    }
-}
-
 if [[ "$(whoami)" != "root" ]]
 then
     printf "\n\e[31m%s\e[0m\n" "[!] Must run script as root"
