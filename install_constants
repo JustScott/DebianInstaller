@@ -1,3 +1,11 @@
+ADMIN_USERNAME='administrator'
+ADMIN_PASSWORD='test' # Cannot be left empty
+
+USER_USERNAME='test'
+USER_PASSWORD='' # Can be left empty
+
+TIMEZONE='America/Chicago'
+
 # Manually partition with cfdisk, then update partition names here
 declare -r EFI_PARTITION="/dev/vda1"   # 1GB (EFI system)
 declare -r BOOT_PARTITION="/dev/vda2"  # 1GB (Linux filesystem)

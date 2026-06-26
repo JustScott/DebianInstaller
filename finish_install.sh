@@ -71,24 +71,24 @@ then
     exit 1
 fi
 
-if [[ -z "$admin_password" ]]
+if [[ -z "$ADMIN_PASSWORD" ]]
 then
     printf "\n\n\e[31m%s\e[0m\n\n" \
         "[!] No admin password set. Make sure to run start_install.sh first"
     exit 1
 fi
 
-if [[ -z "$username" ]]
+if [[ -z "$USER_USERNAME" ]]
 then
     printf "\n\n\e[31m%s\e[0m\n\n" \
         "[!] No username set. Make sure to run start_install.sh first"
     exit 1
 fi
 
-if [[ "$OVERWRITE_HOME_PARTITION" == 'n' && ! -d "/home/$username" ]]
+if [[ "$OVERWRITE_HOME_PARTITION" == 'n' && ! -d "/home/$USER_USERNAME" ]]
 then
     printf "\n\e[31m%s %s %s %s %s\e[0m\n" \
-        "[!] /home/$username doesn't exist. When you're not overwriting the" \
+        "[!] /home/$USER_USERNAME doesn't exist. When you're not overwriting the" \
         "/home partition you must use the username that already exists on" \
         "that partition. Use ls /mnt/home to see the existing users home," \
         "then Change the username in /tmp/activate_installation_variables.sh" \
@@ -250,27 +250,26 @@ install_general_system_packages()
 
 set_timezone()
 {
-    {
-        # Set the keyboard orientation
-        echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-        locale-gen
-        echo "LANG=en_US.UTF-8" > /etc/default/locale
-        update-locale LANG=en_US.UTF-8
-    } >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Configure locale: 'en_US.UTF-8'"
-    [[ $? -ne 0 ]] && exit 1
+    if ! cmp -s "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime &>/dev/null
+    then
+        ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Set timezone: '$TIMEZONE'"
+        [[ $? -ne 0 ]] && exit 1
+    fi
 }
 
-generate_locale()
+configure_locale()
 {
-    if ! grep "^generate_locale$" $COMPLETION_FILE &>/dev/null
-    then
-        locale-gen >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Generate locale"
-        [[ $? -ne 0 ]] && exit 1
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+    locale-gen >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" "Generate locale"
+    [[ $? -ne 0 ]] && exit 1
 
-        echo "generate_locale" >> $COMPLETION_FILE
-    fi
+    echo "LANG=en_US.UTF-8" > /etc/default/locale
+    update-locale LANG=en_US.UTF-8 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" "Update locale"
+    [[ $? -ne 0 ]] && exit 1
 }
 
 encrypt_system_if_set()
@@ -394,121 +393,121 @@ set_plymouth_theme()
 
 create_and_setup_admin()
 {
-    if ! id administrator &>/dev/null
+    if ! id "$ADMIN_USERNAME" &>/dev/null
     then
         home_flag='--create-home'
-        if [[ -d '/home/administrator' ]]
+        if [[ -d "/home/${ADMIN_USERNAME}" ]]
         then
             home_flag='--no-create-home'
         fi
 
-        useradd --user-group $home_flag --uid 1000 -s /bin/bash administrator \
+        useradd --user-group $home_flag --uid 1000 -s /bin/bash "$ADMIN_USERNAME" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Create administrator account"
+        task_output $! "$STDERR_LOG_PATH" "Create '$ADMIN_USERNAME' admin account"
         [[ $? -ne 0 ]] && exit 1
     fi
 
     # Double check the admin account is created
-    if ! id administrator &>/dev/null
+    if ! id "$ADMIN_USERNAME" &>/dev/null
     then
-        printf "\n\e[31m%s %s\e[0m\n" "[!] user 'administrator' doesn't exist..." \
+        printf "\n\e[31m%s %s\e[0m\n" "[!] user '$ADMIN_USERNAME' (admin) doesn't exist..." \
             "this shouldn't happen... stopping"
         exit 1
     fi
 
-    if ! groups administrator | grep "sudo" &>/dev/null
+    if ! groups "$ADMIN_USERNAME" | grep "sudo" &>/dev/null
     then
-        usermod -aG sudo administrator >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Add administrator to the sudo group"
+        usermod -aG sudo "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Add '$ADMIN_USERNAME' (admin) to the sudo group"
         [[ $? -ne 0 ]] && exit 1
     fi
 
     # No need for completion tracking, just set the password
-    echo administrator:"$admin_password" | chpasswd \
+    echo "${ADMIN_USERNAME}":"$ADMIN_PASSWORD" | chpasswd \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Set administrator password"
+    task_output $! "$STDERR_LOG_PATH" "Set '$ADMIN_USERNAME' (admin) password"
     [[ $? -ne 0 ]] && exit 1
 }
 
 create_and_setup_user()
 {
-    if ! id $username &>/dev/null
+    if ! id $USER_USERNAME &>/dev/null
     then
         home_flag='--create-home'
-        if [[ -d "/home/$username" ]]
+        if [[ -d "/home/$USER_USERNAME" ]]
         then
             home_flag='--no-create-home'
         fi
 
-        useradd --user-group $home_flag --uid 1001 -s /bin/bash $username \
+        useradd --user-group $home_flag --uid 1001 -s /bin/bash "$USER_USERNAME" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Create user account: '$username'"
+        task_output $! "$STDERR_LOG_PATH" "Create user account: '$USER_USERNAME'"
         [[ $? -ne 0 ]] && exit 1
     fi
 
     # Double check the user account is created
-    if ! id $username &>/dev/null
+    if ! id "$USER_USERNAME" &>/dev/null
     then
-        printf "\n\e[31m%s %s\e[0m\n" "[!] user '$username' doesn't exist..." \
+        printf "\n\e[31m%s %s\e[0m\n" "[!] user '$USER_USERNAME' doesn't exist..." \
             "this shouldn't happen... stopping"
         exit 1
     fi
 
-    if [[ -n "$user_password" ]]
+    if [[ -n "$USER_PASSWORD" ]]
     then
-        echo "$username":"$user_password" | chpasswd \
+        echo "$USER_USERNAME":"$USER_PASSWORD" | chpasswd \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Set ${username}'s password"
+        task_output $! "$STDERR_LOG_PATH" "Set ${USER_USERNAME}'s password"
         [[ $? -ne 0 ]] && exit 1
     else
         # No need for completion tracking
-        passwd -d "$username" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Make ${username}'s account passwordless"
+        passwd -d "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Make ${USER_USERNAME}'s account passwordless"
         [[ $? -ne 0 ]] && exit 1
     fi
 }
 
 clone_debian_preset_to_user_homes()
 {
-    if [[ -d "/home/administrator" ]]
+    if [[ -d "/home/${ADMIN_USERNAME}" ]]
     then
-        if ! [[ -d /home/administrator/DebianPreset ]]
+        if ! [[ -d /home/${ADMIN_USERNAME}/DebianPreset ]]
         then
-            cd /home/administrator
+            cd "/home/${ADMIN_USERNAME}"
             git clone https://www.github.com/JustScott/DebianPreset \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
-                "Clone DebianPreset to administrator's \$HOME"
+                "Clone DebianPreset to ${ADMIN_USERNAME}'s (admin) \$HOME"
         fi
 
-        if [[ -d /home/administrator/DebianPreset ]]
+        if [[ -d /home/${ADMIN_USERNAME}/DebianPreset ]]
         then
-            chown administrator:administrator -R /home/administrator/DebianPreset
+            chown "${ADMIN_USERNAME}":"${ADMIN_USERNAME}" -R "/home/${ADMIN_USERNAME}/DebianPreset"
         fi
     else
         printf "\n\e[31m%s %s\e[0m\n" \
-            "[!] administrator's \$HOME doesn't exist, this shouldn't" \
+            "[!] ${ADMIN_USERNAME}'s (admin) \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
         exit 1
     fi
 
-    if [[ -d "/home/${username}" ]]
+    if [[ -d "/home/${USER_USERNAME}" ]]
     then
-        if ! [[ -d "/home/${username}/DebianPreset" ]]
+        if ! [[ -d "/home/${USER_USERNAME}/DebianPreset" ]]
         then
-            cd /home/$username
+            cd "/home/${USER_USERNAME}"
             git clone https://www.github.com/JustScott/DebianPreset \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
-                "Clone DebianPreset to $username's \$HOME"
+                "Clone DebianPreset to ${USER_USERNAME}'s \$HOME"
         fi
-        if [[ -d "/home/${username}/DebianPreset" ]]
+        if [[ -d "/home/${USER_USERNAME}/DebianPreset" ]]
         then
-            chown $username:$username -R "/home/${username}/DebianPreset"
+            chown "${USER_USERNAME}":"${USER_USERNAME}" -R "/home/${USER_USERNAME}/DebianPreset"
         fi
     else
         printf "\n\e[31m%s %s\e[0m\n" \
-            "[!] $username's \$HOME doesn't exist, this shouldn't" \
+            "[!] $USERNAME's \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
         exit 1
     fi
@@ -522,8 +521,8 @@ hide_admin_on_login()
     then
         # No need for completion tracking
         echo -e "[User]\nSystemAccount=true" \
-            > /var/lib/AccountsService/users/administrator &
-        task_output $! "$STDERR_LOG_PATH" "Remove administrator from gdm login screen"
+            > "/var/lib/AccountsService/users/${ADMIN_USERNAME}" &
+        task_output $! "$STDERR_LOG_PATH" "Remove '$ADMIN_USERNAME' (admin) from gdm login screen"
         [[ $? -ne 0 ]] && exit 1
     fi
 }
@@ -561,16 +560,8 @@ install_firmware
 install_desktop_environment
 install_general_system_packages
 set_timezone
+configure_locale
 
-if ! cmp -s /usr/share/zoneinfo/America/Chicago /etc/localtime &>/dev/null
-then
-    ln -sf /usr/share/zoneinfo/America/Chicago /etc/localtime \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-    task_output $! "$STDERR_LOG_PATH" "Set timezone: 'America/Chicago'"
-    [[ $? -ne 0 ]] && exit 1
-fi
-
-generate_locale
 encrypt_system_if_set
 configure_grub
 grub_install

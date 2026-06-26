@@ -141,6 +141,42 @@ check_required_install_constants()
         return 1
     fi
 
+    if [[ -z "$ADMIN_USERNAME" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$ADMIN_USERNAME constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -z "$ADMIN_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$ADMIN_PASSWORD constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -z "$USER_USERNAME" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$USER_USERNAME constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -z "$TIMEZONE" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$TIMEZONE constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if ! [[ -f "/usr/share/zoneinfo/${TIMEZONE}" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$TIMEZONE constant must be a valid timezone from" \
+            "/usr/share/zoneinfo, this is fatal...stopping"
+        return 1
+    fi
+
     return 0
 }
 
@@ -176,66 +212,61 @@ check_for_cache_server()
 
 check_for_cache_server || exit 1
 
-# Remove the admin_password from the install variables file if
-# set_admin_password isn't in the completion file, because it could
-# mean the user wants to enter a new password
-if ! grep "^set_admin_password$" $COMPLETION_FILE &>/dev/null
-then
-    sed -i '/^admin_password=/d' $INSTALLATION_VARIABLES_FILE
-fi
-if ! grep "^admin_password=" $INSTALLATION_VARIABLES_FILE &>/dev/null
-then
-    clear 
-    echo -e "* Prompt [1/3] *\n"
-    get_user_password "administrator"
-    if [[ -z "$user_password" ]]
+populate_installation_variables_file()
+{
+    if ! grep "^ADMIN_USERNAME='$ADMIN_USERNAME'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
     then
-        printf "\n\n\e[31m%s\e[0m\n\n" "[!] Must set admin password... stopping"
-        exit 1
+        if grep "^ADMIN_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+        then
+            sed -i '/^ADMIN_USERNAME/d' file &>/dev/null
+        fi
+        echo "ADMIN_USERNAME='$ADMIN_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
 
-    echo -e "\nadmin_password=\"$user_password\"" >> $INSTALLATION_VARIABLES_FILE
-
-    echo "set_admin_password" >> $COMPLETION_FILE
-fi
-
-if ! grep "^set_username$" $COMPLETION_FILE &>/dev/null
-then
-    sed -i '/^username=/d' $INSTALLATION_VARIABLES_FILE
-fi
-if ! grep "^username=" $INSTALLATION_VARIABLES_FILE &>/dev/null
-then
-    clear
-    echo -e "* Prompt [2/3] *\n"
-    echo ' - Set User Name - '
-    get_name
-    if [[ -z "$name" ]]
+    if ! grep "^ADMIN_PASSWORD='$ADMIN_PASSWORD'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
     then
-        printf "\n\n\e[31m%s\e[0m\n\n" "[!] Must set username... stopping"
-        exit 1
+        if grep "^ADMIN_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+        then
+            sed -i '/^ADMIN_PASSWORD/d' file &>/dev/null
+        fi
+        echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
-    echo -e "\nusername=\"$name\"" >> $INSTALLATION_VARIABLES_FILE
 
-    echo "set_username" >> $COMPLETION_FILE
-fi
+    if ! grep "^USER_USERNAME='$USER_USERNAME'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+    then
+        if grep "^USER_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+        then
+            sed -i '/^USER_USERNAME/d' file &>/dev/null
+        fi
+        echo "USER_USERNAME='$USER_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
+    fi
 
-if ! grep "^set_user_password$" $COMPLETION_FILE &>/dev/null
-then
-    sed -i '/^user_password=/d' $INSTALLATION_VARIABLES_FILE
-fi
-if ! grep "^user_password=" $INSTALLATION_VARIABLES_FILE &>/dev/null
-then
-    clear
-    echo -e "* Prompt [3/3] *\n"
-    get_user_password "$name"
+    if ! grep "^USER_PASSWORD='$USER_PASSWORD'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+    then
+        if grep "^USER_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+        then
+            sed -i '/^USER_PASSWORD/d' file &>/dev/null
+        fi
+        echo "USER_PASSWORD='$USER_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
+    fi
 
-    echo -e "\nuser_password=\"$user_password\"" >> $INSTALLATION_VARIABLES_FILE
+    if ! grep "^TIMEZONE='$TIMEZONE'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+    then
+        if grep "^TIMEZONE=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+        then
+            sed -i '/^TIMEZONE/d' file &>/dev/null
+        fi
+        echo "TIMEZONE='$TIMEZONE'" >> "$INSTALLATION_VARIABLES_FILE"
+    fi
+}
 
-    echo "set_user_password" >> $COMPLETION_FILE
-fi
+populate_installation_variables_file
 
-unset name
-unset user_password
+unset ADMIN_USERNAME
+unset ADMIN_PASSWORD
+unset USER_NAME
+unset USER_PASSWORD
+unset TIMEZONE
 
 create_luks_keyfile_on_usb()
 {
