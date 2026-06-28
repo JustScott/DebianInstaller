@@ -175,15 +175,6 @@ install_desktop_environment()
                         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                     task_output $! "$STDERR_LOG_PATH" "Install gnome"
                     [[ $? -ne 0 ]] && exit 1
-
-                    if [[ "$(systemctl get-default)" != "multi-user.target" ]]
-                    then
-                        systemctl set-default multi-user.target \
-                            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-                        task_output $! "$STDERR_LOG_PATH" \
-                            "Disable GUI (re-enabled after driver install after reboot)"
-                        [[ $? -ne 0 ]] && exit 1
-                    fi
                     ;;
                 *)
                     printf "\n\n\e[31m%s\e\n\n" \
@@ -195,7 +186,7 @@ install_desktop_environment()
             apt-get install --yes \
                 fonts-recommended fonts-noto* \
                 plymouth plymouth-themes \
-                mesa-vulkan-drivers \
+                mesa-vulkan-drivers firmware-amd-graphics \
                 system-config-printer-common system-config-printer-udev cups \
                 power-profiles-daemon pipewire-audio \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
@@ -216,7 +207,7 @@ install_general_system_packages()
             linux-image-amd64 grub-efi-amd64-bin \
             cryptsetup cryptsetup-initramfs \
             efibootmgr efivar keyutils \
-            network-manager wpasupplicant \
+            network-manager firmware-realtek firmware-iwlwifi wpasupplicant \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
         [[ $? -ne 0 ]] && exit 1

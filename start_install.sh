@@ -749,19 +749,6 @@ copy_necessary_project_files_to_new_system()
     fi
 }
 
-copy_post_install_scripts_to_admin_home()
-{
-    if ! cmp -s ./DebianInstaller/run_as_admin_after_reboot.sh \
-        "/mnt/home/${ADMIN_USERNAME}/run_as_admin_after_reboot.sh" &>/dev/null
-    then
-        cp ./DebianInstaller/run_as_admin_after_reboot.sh "/mnt/home/${ADMIN_USERNAME}/" \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Copy 'run_as_admin_after_reboot.sh' to ${ADMIN_USERNAME}'s (admin) home on the new system"
-        [[ $? -ne 0 ]] && exit 1
-    fi
-}
-
 if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
@@ -808,5 +795,3 @@ set_hostname
 copy_necessary_project_files_to_new_system
 
 arch-chroot /mnt /bin/bash finish_install.sh
-
-copy_post_install_scripts_to_admin_home
