@@ -207,8 +207,8 @@ install_general_system_packages()
             linux-image-amd64 grub-efi-amd64-bin \
             cryptsetup cryptsetup-initramfs \
             efibootmgr efivar keyutils \
-            network-manager firmware-realtek firmware-iwlwifi wpasupplicant \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            network-manager firmware-realtek firmware-iwlwifi firmware-mediatek \
+            wpasupplicant >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
         [[ $? -ne 0 ]] && exit 1
         echo "install_general_system_packages" >> $COMPLETION_FILE
