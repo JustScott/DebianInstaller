@@ -389,6 +389,13 @@ create_and_setup_admin()
         [[ $? -ne 0 ]] && exit 1
     fi
 
+    if ! groups "$ADMIN_USERNAME" | grep "video" &>/dev/null
+    then
+        usermod -aG sudo "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Add '$ADMIN_USERNAME' (admin) to the video group"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+
     # No need for completion tracking, just set the password
     echo "${ADMIN_USERNAME}":"$ADMIN_PASSWORD" | chpasswd \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
@@ -418,6 +425,13 @@ create_and_setup_user()
         printf "\n\e[31m%s %s\e[0m\n" "[!] user '$USER_USERNAME' doesn't exist..." \
             "this shouldn't happen... stopping"
         exit 1
+    fi
+
+    if ! groups "$USER_USERNAME" | grep "video" &>/dev/null
+    then
+        usermod -aG sudo "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Add '$USER_USERNAME' to the video group"
+        [[ $? -ne 0 ]] && exit 1
     fi
 
     if [[ -n "$USER_PASSWORD" ]]
