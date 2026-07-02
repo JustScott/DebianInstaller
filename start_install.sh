@@ -164,7 +164,7 @@ populate_installation_variables_file()
     then
         if grep "^ADMIN_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
         then
-            sed -i '/^ADMIN_USERNAME/d' file &>/dev/null
+            sed -i '/^ADMIN_USERNAME/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
         fi
         echo "ADMIN_USERNAME='$ADMIN_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
@@ -173,7 +173,7 @@ populate_installation_variables_file()
     then
         if grep "^ADMIN_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
         then
-            sed -i '/^ADMIN_PASSWORD/d' file &>/dev/null
+            sed -i '/^ADMIN_PASSWORD/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
         fi
         echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
@@ -182,7 +182,7 @@ populate_installation_variables_file()
     then
         if grep "^USER_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
         then
-            sed -i '/^USER_USERNAME/d' file &>/dev/null
+            sed -i '/^USER_USERNAME/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
         fi
         echo "USER_USERNAME='$USER_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
@@ -191,7 +191,7 @@ populate_installation_variables_file()
     then
         if grep "^USER_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
         then
-            sed -i '/^USER_PASSWORD/d' file &>/dev/null
+            sed -i '/^USER_PASSWORD/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
         fi
         echo "USER_PASSWORD='$USER_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
     fi
@@ -200,19 +200,23 @@ populate_installation_variables_file()
     then
         if grep "^TIMEZONE=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
         then
-            sed -i '/^TIMEZONE/d' file &>/dev/null
+            sed -i '/^TIMEZONE/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
         fi
         echo "TIMEZONE='$TIMEZONE'" >> "$INSTALLATION_VARIABLES_FILE"
+    fi
+
+    if ! grep "^FIRMWARE_PACKAGES" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+    then
+        echo "FIRMWARE_PACKAGES=()" >> "$INSTALLATION_VARIABLES_FILE"
     fi
 }
 
 populate_installation_variables_file
 
-# no `unset ADMIN_USERNAME`, it's used later in this script
+# unset variables not used in this script (used in finish_install.sh later)
 unset ADMIN_PASSWORD
 unset USER_NAME
 unset USER_PASSWORD
-unset TIMEZONE
 
 create_luks_keyfile_on_usb()
 {
@@ -624,6 +628,114 @@ apt_update()
     fi
 }
 
+# DISCLAIMER: Only AMD CPU microcode, AMD iGPU firmware, and mediatek firmware
+#             have been tested.
+find_correct_firmware()
+{
+    if ! dpkg -s pciutils &>/dev/null
+    then
+        apt-get install --yes pciutils \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Install pciutils for finding the correct firmware with lspci"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+
+    local firmware_packages=()
+
+    # GPU firmware
+    local LSPCI_OUTPUT="$(lspci -nn)"
+
+    # GPU firmware
+    if echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep "Advanced Micro Devices" &>/dev/null
+    then
+        if ! echo "${firmware_packages[*]}" | grep "firmware-amd-graphics" &>/dev/null
+        then
+            firmware_packages+=(firmware-amd-graphics)
+        fi
+        if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+        then
+            firmware_packages+=(mesa-vulkan-drivers)
+        fi
+    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel"
+    then
+        if ! echo "${firmware_packages[*]}" | grep "firmware-misc-nonfree" &>/dev/null
+        then
+            firmware_packages+=(firmware-misc-nonfree)
+        fi
+        if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+        then
+            firmware_packages+=(mesa-vulkan-drivers)
+        fi
+    fi
+    # REQUIRES non-free in apt sources... not sure if I want to support that yet
+    #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia"
+    #    then
+    #        if ! echo "${firmware_packages[*]}" | grep "nvidia-driver" &>/dev/null
+    #        then
+    #            firmware_packages+=(nvidia-driver)
+    #        fi
+    #        if ! echo "${firmware_packages[*]}" | grep "firmware-nvidia-gsp" &>/dev/null
+    #        then
+    #            firmware_packages+=(firmware-nvidia-gsp)
+    #        fi
+    #    fi
+
+    # CPU microcode
+    if cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "amd" &>/dev/null
+    then
+        if ! echo "${firmware_packages[*]}" | grep "amd64-microcode" &>/dev/null
+        then
+            firmware_packages+=(amd64-microcode)
+        fi
+    elif cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "intel"
+    then
+        if ! echo "${firmware_packages[*]}" | grep "intel-microcode" &>/dev/null
+        then
+            firmware_packages+=(intel-microcode)
+        fi
+    fi
+
+    # Wifi firmware (no elif, incase multiple chips)
+    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "mediatek" &>/dev/null
+    then
+        if ! echo "${firmware_packages[*]}" | grep "firmware-mediatek" &>/dev/null
+        then
+            firmware_packages+=(firmware-mediatek)
+        fi
+    fi
+
+    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "iwlwifi" &>/dev/null
+    then
+        if ! echo "${firmware_packages[*]}" | grep "firmware-iwlwifi" &>/dev/null
+        then
+            firmware_packages+=(firmware-iwlwifi)
+        fi
+    fi
+
+    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "realtek" &>/dev/null
+    then
+        if ! echo "${firmware_packages[*]}" | grep "firmware-realtek" &>/dev/null
+        then
+            firmware_packages+=(firmware-realtek)
+        fi
+    fi
+
+    if ! grep "^FIRMWARE_PACKAGES=(${firmware_packages[*]})$" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
+    then
+        sed -i '/^FIRMWARE_PACKAGES=/d' "$INSTALLATION_VARIABLES_FILE" \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Remove old FIRMWARE_PACKAGES entry in the installation variables file"
+        [[ $? -ne 0 ]] && exit 1
+        echo "FIRMWARE_PACKAGES=(${firmware_packages[*]})" \
+            >> "$INSTALLATION_VARIABLES_FILE" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Add the new firmware packages to the installation variables file: (${firmware_packages[*]})"
+        [[ $? -ne 0 ]] && exit 1
+    fi
+}
+
 install_debootstrap()
 {
     if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
@@ -784,10 +896,11 @@ else
 fi
 
 configure_swap
-set_timezone "America/Chicago"
+set_timezone "$TIMEZONE"
 set_apt_cache_server
 copy_apt_sources_to_live_system
 apt_update
+find_correct_firmware
 install_debootstrap
 run_debootstrap
 generate_fstab_file

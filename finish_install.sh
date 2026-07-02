@@ -151,6 +151,21 @@ update_apt()
     fi
 }
 
+install_firmware()
+{
+    if [[ "${#FIRMWARE_PACKAGES[@]}" -gt 0 ]]
+    then
+        if ! dpkg -s ${FIRMWARE_PACKAGES[@]} &>/dev/null
+        then
+            apt-get install --yes ${FIRMWARE_PACKAGES[@]} \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Install firmware packages: (${FIRMWARE_PACKAGES[*]})"
+            [[ $? -ne 0 ]] && exit 1
+        fi
+    fi
+}
+
 install_desktop_environment()
 {
     if [[ -n "$DESKTOP_ENVIRONMENT" ]]
@@ -186,7 +201,6 @@ install_desktop_environment()
             apt-get install --yes \
                 fonts-recommended fonts-noto* \
                 plymouth plymouth-themes \
-                mesa-vulkan-drivers firmware-amd-graphics \
                 system-config-printer-common system-config-printer-udev cups \
                 power-profiles-daemon pipewire-audio \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
@@ -207,8 +221,8 @@ install_general_system_packages()
             linux-image-amd64 grub-efi-amd64-bin \
             cryptsetup cryptsetup-initramfs \
             efibootmgr efivar keyutils \
-            network-manager firmware-realtek firmware-iwlwifi firmware-mediatek \
-            wpasupplicant >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            network-manager wpasupplicant \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
         [[ $? -ne 0 ]] && exit 1
         echo "install_general_system_packages" >> $COMPLETION_FILE
@@ -538,6 +552,7 @@ keyboard-configuration keyboard-configuration/variantcode string
 console-setup console-setup/charmap47 select UTF-8
 EOF
 
+install_firmware
 install_desktop_environment
 install_general_system_packages
 set_timezone
