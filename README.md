@@ -43,3 +43,8 @@ to start after the last successfully ran command.
 There is also a `finish_install_completion.txt` file located at /mnt/
 that tracks the completion of `finish_install.sh`. All the rules above
 regarding `start_install` apply the same.
+
+### Post Installation
+You can run `bash ./DebianInstaller/safely_shutdown_system.sh` after the
+installation scripts are done running to automatically remove sensitive
+files and safely unmount all the partitions.
