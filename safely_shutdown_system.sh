@@ -22,6 +22,7 @@ INSTALLATION_VARIABLES_FILE=/mnt/activate_installation_variables.sh
 COMPLETION_FILE=/mnt/finish_install_completion.txt
 FINISH_INSTALL_SCRIPT=/mnt/finish_install.sh
 NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY=/mnt/pretty_output_library.sh
+NEW_SYSTEM_STDERR_LOG_PATH=/mnt/debianinstallererrors.log
 
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
@@ -70,6 +71,14 @@ remove_sensitive_files()
         rm $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "remove sensitive file: $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if [[ -f "$NEW_SYSTEM_STDERR_LOG_PATH" ]]
+    then
+        rm $NEW_SYSTEM_STDERR_LOG_PATH >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $NEW_SYSTEM_STDERR_LOG_PATH"
         [[ $? -ne 0 ]] && return 1
     fi
 
@@ -144,6 +153,8 @@ remove_sensitive_files || exit 1
 shutoff_swapfile || exit 1
 unmount_system || exit 1
 close_encrypted_partitions || exit 1
+
+
 
 echo ""
 # Gives the user so many seconds to cancel the shutdown 
