@@ -90,7 +90,7 @@ shutoff_swapfile()
     if swapon --show | grep "/swapfile" &>/dev/null
     then
         swapoff /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Turn of system swap"
+        task_output $! "$STDERR_LOG_PATH" "Turn off system swap"
         [[ $? -ne 0 ]] && return 1
     fi
 
