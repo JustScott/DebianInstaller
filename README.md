@@ -7,7 +7,7 @@ Scripts to setup a minimal Debian Linux system.
 First, create 4 partitions:
   * 1GB EFI partition
   * 1GB boot partition
-  * 20GB boot partition # Can make however large you need
+  * 20GB root partition # (Atleast) Can make however large you need
   * home partition with the remaining disk space
 
 ```bash
@@ -22,7 +22,7 @@ and run `start_install.sh`:
 
 ```bash
 apt update
-apt install -y git
+apt install -y git nano
 git clone https://www.github.com/JustScott/DebianInstaller
 nano ./DebianInstaller/install_constants # Populate the relevant variables
 bash ./DebianInstaller/start_install.sh # run as root
