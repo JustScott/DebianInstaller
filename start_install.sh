@@ -882,7 +882,6 @@ then
     luks_open_home
 
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
-    format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
 
     populate_crypttab
