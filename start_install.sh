@@ -131,6 +131,17 @@ check_required_install_constants()
         return 1
     fi
 
+    if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
+    then
+        if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
+        then
+            printf "\n\e[31m%s %s\e[0m\n" \
+                "[!] \$USE_KEYFILE_AT_BOOT constant must be 'y' or 'n'," \
+                "this is fatal...stopping"
+            return 1
+        fi
+    fi
+
     return 0
 }
 
@@ -548,33 +559,49 @@ populate_crypttab()
 
     if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
     then
+        if [[ -n "$LUKS_PASSWORD" ]]
+        then
+            if [[ "$USE_KEYFILE_AT_BOOT" == 'n' || -z "$LUKS_KEYFILE_PARTITION" ]]
+            then
+                echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
+                [[ $? -ne 0 ]] && exit 1
+            fi
+        fi
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
-            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-            [[ $? -ne 0 ]] && exit 1
-        else
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
-            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-            [[ $? -ne 0 ]] && exit 1
+            if [[ "$USE_KEYFILE_AT_BOOT" == 'y' || -z "$LUKS_PASSWORD" ]]
+            then
+                echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
+                [[ $? -ne 0 ]] && exit 1
+            fi
         fi
     fi
 
     if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
     then
+        if [[ -n "$LUKS_PASSWORD" ]]
+        then
+            if [[ "$USE_KEYFILE_AT_BOOT" == 'n' || -z "$LUKS_KEYFILE_PARTITION" ]]
+            then
+                echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
+                [[ $? -ne 0 ]] && exit 1
+            fi
+        fi
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
-echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
-            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-            [[ $? -ne 0 ]] && exit 1
-        else
-            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
-            >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-            [[ $? -ne 0 ]] && exit 1
+            if [[ "$USE_KEYFILE_AT_BOOT" == 'y' || -z "$LUKS_PASSWORD" ]]
+            then
+                echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
+                [[ $? -ne 0 ]] && exit 1
+            fi
         fi
     fi
 }
