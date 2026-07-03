@@ -215,7 +215,7 @@ populate_installation_variables_file
 
 # unset variables not used in this script (used in finish_install.sh later)
 unset ADMIN_PASSWORD
-unset USER_NAME
+unset USER_USERNAME
 unset USER_PASSWORD
 
 create_luks_keyfile_on_usb()
