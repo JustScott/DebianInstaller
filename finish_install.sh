@@ -253,6 +253,23 @@ configure_locale()
     [[ $? -ne 0 ]] && exit 1
 }
 
+set_plymouth_theme()
+{
+    if dpkg -s plymouth &>/dev/null
+    then
+        if ! grep "^set_splash_theme$" $COMPLETION_FILE &>/dev/null
+        then
+            plymouth-set-default-theme -R moonlight \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Set the splash theme with plymouth-themes"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "set_splash_theme" >> $COMPLETION_FILE
+        fi
+    fi
+}
+
 encrypt_system_if_set()
 {
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
@@ -353,22 +370,6 @@ update_initramfs()
         [[ $? -ne 0 ]] && exit 1
 
         echo "update_initramfs" >> $COMPLETION_FILE
-    fi
-}
-
-set_plymouth_theme()
-{
-    if dpkg -s plymouth &>/dev/null
-    then
-        if ! grep "^set_splash_theme$" $COMPLETION_FILE &>/dev/null
-        then
-            plymouth-set-default-theme -R moonlight \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "Set the splash theme with plymouth-themes"
-
-            echo "set_splash_theme" >> $COMPLETION_FILE
-        fi
     fi
 }
 
@@ -502,7 +503,7 @@ clone_debian_preset_to_user_homes()
         fi
     else
         printf "\n\e[31m%s %s\e[0m\n" \
-            "[!] $USERNAME's \$HOME doesn't exist, this shouldn't" \
+            "[!] $USER_USERNAME's \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
         exit 1
     fi
@@ -512,7 +513,7 @@ clone_debian_preset_to_user_homes()
 
 hide_admin_on_login()
 {
-    if dpkg -s gdm3 &>dev/null
+    if dpkg -s gdm3 &>/dev/null
     then
         # No need for completion tracking
         echo -e "[User]\nSystemAccount=true" \
@@ -557,6 +558,7 @@ install_desktop_environment
 install_general_system_packages
 set_timezone
 configure_locale
+set_plymouth_theme
 
 encrypt_system_if_set
 configure_grub
