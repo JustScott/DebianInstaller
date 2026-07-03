@@ -405,7 +405,7 @@ create_and_setup_admin()
 
     if ! groups "$ADMIN_USERNAME" | grep "video" &>/dev/null
     then
-        usermod -aG sudo "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        usermod -aG video "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add '$ADMIN_USERNAME' (admin) to the video group"
         [[ $? -ne 0 ]] && exit 1
     fi
@@ -443,7 +443,7 @@ create_and_setup_user()
 
     if ! groups "$USER_USERNAME" | grep "video" &>/dev/null
     then
-        usermod -aG sudo "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        usermod -aG video "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add '$USER_USERNAME' to the video group"
         [[ $? -ne 0 ]] && exit 1
     fi
