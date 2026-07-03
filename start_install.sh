@@ -438,7 +438,13 @@ mount_partitions()
         mount --mkdir "$home_partition" /mnt/home \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Mount the home partition ($HOME_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        if [[ $? -ne 0 ]]
+        then
+            printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                "Is it possible OVERWRITE_HOME_PARTITION is set to 'n' in" \
+                "install_constants, but the existing home partition is empty?"
+            exit 1
+        fi
 
         echo "mount_home" >> $COMPLETION_FILE
     fi
