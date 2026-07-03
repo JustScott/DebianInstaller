@@ -21,6 +21,7 @@ INSTALL_CONSTANTS_FILE=/mnt/install_constants
 INSTALLATION_VARIABLES_FILE=/mnt/activate_installation_variables.sh
 COMPLETION_FILE=/mnt/finish_install_completion.txt
 FINISH_INSTALL_SCRIPT=/mnt/finish_install.sh
+NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY=/mnt/pretty_output_library.sh
 
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
@@ -61,6 +62,14 @@ remove_sensitive_files()
         rm $FINISH_INSTALL_SCRIPT >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "remove sensitive file: $FINISH_INSTALL_SCRIPT"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if [[ -f "$NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY" ]]
+    then
+        rm $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY"
         [[ $? -ne 0 ]] && return 1
     fi
 
