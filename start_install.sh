@@ -123,6 +123,14 @@ check_required_install_constants()
         return 1
     fi
 
+    if [[ "$ENABLE_WIFI" != 'y' && "$ENABLE_WIFI" != 'n' ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$ENABLE_WIFI constant must be 'y' or 'n'," \
+            "this is fatal...stopping"
+        return 1
+    fi
+
     return 0
 }
 
@@ -212,11 +220,6 @@ populate_installation_variables_file()
 }
 
 populate_installation_variables_file
-
-# unset variables not used in this script (used in finish_install.sh later)
-unset ADMIN_PASSWORD
-unset USER_USERNAME
-unset USER_PASSWORD
 
 create_luks_keyfile_on_usb()
 {
@@ -653,39 +656,43 @@ find_correct_firmware()
     local LSPCI_OUTPUT="$(lspci -nn)"
 
     # GPU firmware
-    if echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep "Advanced Micro Devices" &>/dev/null
+    if [[ -n "$DESKTOP_ENVIRONMENT" ]]
     then
-        if ! echo "${firmware_packages[*]}" | grep "firmware-amd-graphics" &>/dev/null
+        if echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" \
+            | grep "Advanced Micro Devices" &>/dev/null
         then
-            firmware_packages+=(firmware-amd-graphics)
-        fi
-        if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+            if ! echo "${firmware_packages[*]}" | grep "firmware-amd-graphics" &>/dev/null
+            then
+                firmware_packages+=(firmware-amd-graphics)
+            fi
+            if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+            then
+                firmware_packages+=(mesa-vulkan-drivers)
+            fi
+        elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel"
         then
-            firmware_packages+=(mesa-vulkan-drivers)
-        fi
-    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel"
-    then
-        if ! echo "${firmware_packages[*]}" | grep "firmware-misc-nonfree" &>/dev/null
-        then
-            firmware_packages+=(firmware-misc-nonfree)
-        fi
-        if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
-        then
-            firmware_packages+=(mesa-vulkan-drivers)
+            if ! echo "${firmware_packages[*]}" | grep "firmware-misc-nonfree" &>/dev/null
+            then
+                firmware_packages+=(firmware-misc-nonfree)
+            fi
+            if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+            then
+                firmware_packages+=(mesa-vulkan-drivers)
+            fi
         fi
     fi
-    # REQUIRES non-free in apt sources... not sure if I want to support that yet
-    #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia"
-    #    then
-    #        if ! echo "${firmware_packages[*]}" | grep "nvidia-driver" &>/dev/null
-    #        then
-    #            firmware_packages+=(nvidia-driver)
-    #        fi
-    #        if ! echo "${firmware_packages[*]}" | grep "firmware-nvidia-gsp" &>/dev/null
-    #        then
-    #            firmware_packages+=(firmware-nvidia-gsp)
-    #        fi
-    #    fi
+        # REQUIRES non-free in apt sources... not sure if I want to support that yet
+        #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia"
+        #    then
+        #        if ! echo "${firmware_packages[*]}" | grep "nvidia-driver" &>/dev/null
+        #        then
+        #            firmware_packages+=(nvidia-driver)
+        #        fi
+        #        if ! echo "${firmware_packages[*]}" | grep "firmware-nvidia-gsp" &>/dev/null
+        #        then
+        #            firmware_packages+=(firmware-nvidia-gsp)
+        #        fi
+        #    fi
 
     # CPU microcode
     if cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "amd" &>/dev/null
@@ -703,27 +710,30 @@ find_correct_firmware()
     fi
 
     # Wifi firmware (no elif, incase multiple chips)
-    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "mediatek" &>/dev/null
+    if [[ "$ENABLE_WIFI" == 'y' ]]
     then
-        if ! echo "${firmware_packages[*]}" | grep "firmware-mediatek" &>/dev/null
+        if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "mediatek" &>/dev/null
         then
-            firmware_packages+=(firmware-mediatek)
+            if ! echo "${firmware_packages[*]}" | grep "firmware-mediatek" &>/dev/null
+            then
+                firmware_packages+=(firmware-mediatek)
+            fi
         fi
-    fi
 
-    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "iwlwifi" &>/dev/null
-    then
-        if ! echo "${firmware_packages[*]}" | grep "firmware-iwlwifi" &>/dev/null
+        if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "iwlwifi" &>/dev/null
         then
-            firmware_packages+=(firmware-iwlwifi)
+            if ! echo "${firmware_packages[*]}" | grep "firmware-iwlwifi" &>/dev/null
+            then
+                firmware_packages+=(firmware-iwlwifi)
+            fi
         fi
-    fi
 
-    if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "realtek" &>/dev/null
-    then
-        if ! echo "${firmware_packages[*]}" | grep "firmware-realtek" &>/dev/null
+        if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "realtek" &>/dev/null
         then
-            firmware_packages+=(firmware-realtek)
+            if ! echo "${firmware_packages[*]}" | grep "firmware-realtek" &>/dev/null
+            then
+                firmware_packages+=(firmware-realtek)
+            fi
         fi
     fi
 

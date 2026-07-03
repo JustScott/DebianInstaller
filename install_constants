@@ -1,10 +1,12 @@
-ADMIN_USERNAME='administrator'
-ADMIN_PASSWORD='test' # Cannot be left empty
+declare -r ADMIN_USERNAME='administrator'
+declare -r ADMIN_PASSWORD='test' # Cannot be left empty
 
-USER_USERNAME='test'
-USER_PASSWORD='' # Can be left empty
+declare -r USER_USERNAME='test'
+declare -r USER_PASSWORD='' # Can be left empty
 
-TIMEZONE='America/Chicago'
+declare -r TIMEZONE='America/Chicago'
+
+declare -r ENABLE_WIFI='y' # set to 'n' for systems using only ethernet
 
 # Manually partition with cfdisk, then update partition names here
 declare -r EFI_PARTITION="/dev/vda1"   # 1GB (EFI system)
