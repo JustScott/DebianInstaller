@@ -327,6 +327,53 @@ luks_format_home_with_passphrase() {
     return 0
 }
 
+luks_add_passphrase_to_root()
+{
+    if [[ -z "$LUKS_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "Luks password not set in 'install_constants' file"
+        exit 1
+    fi
+
+    if ! grep "^luksAddPassphraseToRoot$" $COMPLETION_FILE &>/dev/null
+    then
+        echo -n "$LUKS_PASSWORD" | cryptsetup luksAddKey \
+            --key-file /media/keyfile_usb/luks_keyfile \
+            $ROOT_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "luksAddKey to root ($ROOT_PARTITION) with passphrase"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksAddPassphraseToRoot" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
+luks_add_passphrase_to_home()
+{
+    if [[ -z "$LUKS_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "Luks password not set in 'install_constants' file"
+        exit 1
+    fi
+
+    if ! grep "^luksAddPassphraseToHome$" $COMPLETION_FILE &>/dev/null
+    then
+        echo -n "$LUKS_PASSWORD" | cryptsetup luksAddKey \
+            --key-file /media/keyfile_usb/luks_keyfile \
+            $HOME_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "luksAddKey to home ($HOME_PARTITION) with passphrase"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksAddPassphraseToHome" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
 luks_open_root()
 {
     if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
@@ -501,14 +548,14 @@ populate_crypttab()
 
     if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
+        if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
             >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
         else
-            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+            echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
             >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
@@ -517,14 +564,14 @@ populate_crypttab()
 
     if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
+        if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
-            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
             >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
         else
-            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+            echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
             >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
             [[ $? -ne 0 ]] && exit 1
@@ -884,14 +931,18 @@ then
         create_luks_keyfile_on_usb
         luks_format_root_with_keyfile
         luks_format_home_with_keyfile
-    elif [[ -n "$LUKS_PASSWORD" ]]
+    fi
+
+    if [[ -n "$LUKS_PASSWORD" ]]
     then
-        luks_format_root_with_passphrase
-        luks_format_home_with_passphrase
-    else
-        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
-            "LUKS_PASSWORD or LUKS_KEYFILE_PARTITION were empty. This shouldn't happen."
-        exit 1
+        if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
+        then
+            luks_add_passphrase_to_root
+            luks_add_passphrase_to_home
+        else
+            luks_format_root_with_passphrase
+            luks_format_home_with_passphrase
+        fi
     fi
 
     luks_open_root

@@ -15,7 +15,9 @@ declare -r ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system pack
 declare -r HOME_PARTITION="/dev/vda4"  # Remaining space for user packages (Linux filesystem)
 declare -r OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
 
-# Choose only one method, leave both empty for no encryption
+# Leave both empty for no encryption, set one for a single method of decryption,
+# or set both to use the keyfile as a primary method of decryption, and the password
+# as a secondary emergency backup method (from a live environment, no prompt on boot)
 declare -r LUKS_KEYFILE_PARTITION=""
 declare -r LUKS_PASSWORD=""
 
