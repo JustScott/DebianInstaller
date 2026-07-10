@@ -353,7 +353,7 @@ luks_add_passphrase_to_root()
             --key-file /media/keyfile_usb/luks_keyfile \
             $ROOT_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "luksAddKey to root ($ROOT_PARTITION) with passphrase"
+            "Add LUKS passphrase to root ($ROOT_PARTITION)"
         [[ $? -ne 0 ]] && exit 1
 
         echo "luksAddPassphraseToRoot" >> $COMPLETION_FILE
@@ -376,10 +376,59 @@ luks_add_passphrase_to_home()
         echo -n "$LUKS_PASSWORD" | cryptsetup luksAddKey \
             --key-file /media/keyfile_usb/luks_keyfile \
             $HOME_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "luksAddKey to home ($HOME_PARTITION) with passphrase"
+        task_output $! "$STDERR_LOG_PATH" \
+            "Add LUKS passphrase to home ($HOME_PARTITION)"
         [[ $? -ne 0 ]] && exit 1
 
         echo "luksAddPassphraseToHome" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
+luks_add_keyfile_to_root()
+{
+    if [[ -z "$LUKS_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "Luks password not set in 'install_constants' file"
+        exit 1
+    fi
+
+    if ! grep "^luksAddKeyFileToRoot$" $COMPLETION_FILE &>/dev/null
+    then
+        echo -n "$LUKS_PASSWORD" | cryptsetup luksAddKey --key-file=- \
+            $ROOT_PARTITION /media/keyfile_usb/luks_keyfile \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Add LUKS keyfile to root ($ROOT_PARTITION)"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksAddKeyFileToRoot" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
+luks_add_keyfile_to_home()
+{
+    if [[ -z "$LUKS_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "Luks password not set in 'install_constants' file"
+        exit 1
+    fi
+
+    if ! grep "^luksAddKeyFileToHome$" $COMPLETION_FILE &>/dev/null
+    then
+        echo -n "$LUKS_PASSWORD" | cryptsetup luksAddKey --key-file=- \
+            $HOME_PARTITION /media/keyfile_usb/luks_keyfile \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Add LUKS keyfile to home ($HOME_PARTITION)"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "luksAddKeyFileToHome" >> $COMPLETION_FILE
     fi
 
     return 0
@@ -412,23 +461,79 @@ luks_open_home()
 {
     if ! grep "^luksOpenHome$" $COMPLETION_FILE &>/dev/null
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
+        cryptsetup close crypt_home &>/dev/null
+
+        if [[ -n "$LUKS_PASSWORD" && -z "$LUKS_KEYFILE_PARTITION" ]]
         then
             echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
                 crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "open luks encrypted home partition with passphrase"
-            [[ $? -ne 0 ]] && exit 1
-        else
+            if [[ $? -ne 0 ]]
+            then
+                if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
+                then
+                    printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                        "Probably used the wrong partition passphrase, try" \
+                        "changing it in install_constants"
+                fi
+                exit 1
+            fi
+        elif [[ -n "$LUKS_KEYFILE_PARTITION" && -z "$LUKS_PASSWORD" ]]
+        then
             cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
                 $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "open luks encrypted home partition with USB keyfile"
-            [[ $? -ne 0 ]] && exit 1
+            if [[ $? -ne 0 ]]
+            then
+                if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
+                then
+                    printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                        "Probably used the wrong partition passphrase, try" \
+                        "changing it in install_constants"
+                fi
+                exit 1
+            fi
+        elif [[ -n "$LUKS_PASSWORD" && -n "$LUKS_KEYFILE_PARTITION" ]]
+        then
+            cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+                $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted home partition with USB keyfile"
+            if [[ $? -eq 0 ]]
+            then
+                cryptsetup close crypt_home &>/dev/null
+                echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
+                    crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" \
+                    "open luks encrypted home partition with passphrase"
+                if [[ $? -ne 0 ]]
+                then
+                    luks_add_passphrase_to_home
+                fi
+            else
+                echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
+                    crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" \
+                    "open luks encrypted home partition with passphrase"
+                if [[ $? -eq 0 ]]
+                then
+                    luks_add_keyfile_to_home
+                else
+                    printf "\n\n\e[36m%s %s %s %s\e[0m\n" "[TIP]" \
+                        "Neither the passphrase nor the keyfile could unlock" \
+                        "the home partition. Did you mean to set" \
+                        "OVERWRITE_HOME_PARTITION='y' in install_constants?"
+                    exit 1
+                fi
+            fi
         fi
 
         echo "luksOpenHome" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 format_partitions()
@@ -953,11 +1058,20 @@ copy_necessary_project_files_to_new_system()
 
 if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
+    if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
+    then
+        luks_open_home
+    fi
+
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
         create_luks_keyfile_on_usb
         luks_format_root_with_keyfile
-        luks_format_home_with_keyfile
+
+        if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
+        then
+            luks_format_home_with_keyfile
+        fi
     fi
 
     if [[ -n "$LUKS_PASSWORD" ]]
@@ -965,22 +1079,35 @@ then
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
             luks_add_passphrase_to_root
-            luks_add_passphrase_to_home
+            if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
+            then
+                luks_add_passphrase_to_home
+            fi
         else
             luks_format_root_with_passphrase
-            luks_format_home_with_passphrase
+
+            if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
+            then
+                luks_format_home_with_passphrase
+            fi
         fi
     fi
 
-    luks_open_root
-    luks_open_home
+    if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
+    then
+        luks_open_home
+    fi
 
+    luks_open_root
+
+    # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
 
     populate_crypttab
 elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
 then
+    # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
     format_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
     mount_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
 else

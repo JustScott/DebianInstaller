@@ -15,9 +15,14 @@ declare -r ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system pack
 declare -r HOME_PARTITION="/dev/vda4"  # Remaining space for user packages (Linux filesystem)
 declare -r OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
 
-# Leave both empty for no encryption, set one for a single method of decryption,
-# or set both to use the keyfile as a primary method of decryption, and the password
+# Leave both empty for no encryption, set one for a single method of encryption,
+# or set both to use the keyfile as a primary method of encryption, and the password
 # as a secondary emergency backup method (from a live environment, no prompt on boot)
+#
+# If reinstalling with OVERWRITE_HOME_PARTITION='n' and you only have home currently
+# encrypted with a luks keyfile partition, you can populate the LUKS_PASSWORD field
+# and that passphrase will be added to both the home and root luks partitions. Vice
+# versa if you have an existing luks password set, you can add a new LUKS_KEYFILE_PARTITION.
 declare -r LUKS_KEYFILE_PARTITION=""
 declare -r LUKS_PASSWORD=""
 
