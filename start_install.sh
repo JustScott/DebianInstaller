@@ -501,7 +501,8 @@ luks_open_home()
                 $HOME_PARTITION crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "open luks encrypted home partition with USB keyfile"
-            if [[ $? -eq 0 ]]
+            local luks_open_return_code=$?
+            if [[ $luks_open_return_code -eq 0 && "$OVERWRITE_HOME_PARTITION" == 'n' ]]
             then
                 cryptsetup close crypt_home &>/dev/null
                 echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
@@ -510,9 +511,13 @@ luks_open_home()
                     "open luks encrypted home partition with passphrase"
                 if [[ $? -ne 0 ]]
                 then
+                    printf "\n\e[36m%s %s\e[0m\n\n" "[TIP]" \
+                        "It's okay if this fails, as long as subsequent steps don't"
                     luks_add_passphrase_to_home
+                    luks_open_home
                 fi
-            else
+            elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_HOME_PARTITION" == 'n' ]]
+            then
                 echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
                     crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" \
@@ -527,6 +532,12 @@ luks_open_home()
                         "OVERWRITE_HOME_PARTITION='y' in install_constants?"
                     exit 1
                 fi
+            elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_HOME_PARTITION" == 'y' ]]
+            then
+                printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                    "The home partition is being overwritten, so this luksOpen" \
+                    "step should never fail. Must be a logic error."
+                exit 1
             fi
         fi
 
@@ -1058,11 +1069,6 @@ copy_necessary_project_files_to_new_system()
 
 if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
-    if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
-    then
-        luks_open_home
-    fi
-
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
         create_luks_keyfile_on_usb
@@ -1072,6 +1078,11 @@ then
         then
             luks_format_home_with_keyfile
         fi
+    fi
+
+    if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
+    then
+        luks_open_home
     fi
 
     if [[ -n "$LUKS_PASSWORD" ]]
