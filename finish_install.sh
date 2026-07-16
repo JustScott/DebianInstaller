@@ -15,11 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
-INSTALLATION_VARIABLES_FILE=/activate_installation_variables.sh
-
-INSTALL_CONSTANTS_FILE=/install_constants
-
 PRETTY_OUTPUT_LIBRARY=/pretty_output_library.sh
 
 COMPLETION_FILE="/finish_install_completion.txt"
@@ -45,14 +40,6 @@ then
     exit 1
 fi
 
-if ! source $INSTALL_CONSTANTS_FILE &>/dev/null
-then
-    printf "\n\n\e[31m%s %s\e[0m\n\n" \
-        "[!] Couldn't source the install_constants file. Make sure" \
-        "to run bash ./DebianInstaller/start_install.sh."
-    exit 1
-fi
-
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
     printf "\n\n\e[31m%s %s\e[0m\n\n" \
@@ -63,27 +50,67 @@ fi
 
 declare -r STDERR_LOG_PATH="/debianinstallererrors.log"
 
-if ! source $INSTALLATION_VARIABLES_FILE &>/dev/null
-then
-    printf "\n\n\e[31m%s %s\e[0m\n\n" \
-        "[!] Couldn't source the installation variable. Make sure" \
-        "to run \`bash ./DebianInstaller/start_install.sh\` first"
-    exit 1
-fi
+check_required_install_constants()
+{
+    if [[ "$OVERWRITE_HOME_PARTITION" != 'y' && "$OVERWRITE_HOME_PARTITION" != 'n' ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$OVERWRITE_HOME_PARTITION constant must be 'y' or 'n'," \
+            "this is fatal...stopping"
+        return 1
+    fi
 
-if [[ -z "$ADMIN_PASSWORD" ]]
-then
-    printf "\n\n\e[31m%s\e[0m\n\n" \
-        "[!] No admin password set. Make sure to run start_install.sh first"
-    exit 1
-fi
+    if [[ -z "$ADMIN_USERNAME" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$ADMIN_USERNAME constant not set, this is fatal...stopping"
+        return 1
+    fi
 
-if [[ -z "$USER_USERNAME" ]]
-then
-    printf "\n\n\e[31m%s\e[0m\n\n" \
-        "[!] No username set. Make sure to run start_install.sh first"
-    exit 1
-fi
+    if [[ -z "$ADMIN_PASSWORD" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$ADMIN_PASSWORD constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -z "$USER_USERNAME" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$USER_USERNAME constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -z "$TIMEZONE" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$TIMEZONE constant not set, this is fatal...stopping"
+        return 1
+    fi
+
+    if ! [[ -f "/usr/share/zoneinfo/${TIMEZONE}" ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$TIMEZONE constant must be a valid timezone from" \
+            "/usr/share/zoneinfo, this is fatal...stopping"
+        return 1
+    fi
+
+    if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
+    then
+        if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
+        then
+            printf "\n\e[31m%s %s\e[0m\n" \
+                "[!] \$USE_KEYFILE_AT_BOOT constant must be 'y' or 'n'," \
+                "this is fatal...stopping"
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+check_required_install_constants || exit 1
 
 if [[ "$OVERWRITE_HOME_PARTITION" == 'n' && ! -d "/home/$USER_USERNAME" ]]
 then

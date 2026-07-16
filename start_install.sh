@@ -21,13 +21,13 @@
 
 # TODO: Add section for checking that all needed files are accessible
 
-INSTALLATION_VARIABLES_FILE=/tmp/activate_installation_variables.sh
-
 PRETTY_OUTPUT_LIBRARY=./DebianInstaller/pretty_output_library.sh
 
 COMPLETION_FILE=./start_install_completion.txt
 
 INSTALL_CONSTANTS_FILE=./DebianInstaller/install_constants
+
+FIRMWARE_PACKAGES=()
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -176,61 +176,6 @@ check_for_cache_server()
 }
 
 check_for_cache_server || exit 1
-
-populate_installation_variables_file()
-{
-    if ! grep "^ADMIN_USERNAME='$ADMIN_USERNAME'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        if grep "^ADMIN_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-        then
-            sed -i '/^ADMIN_USERNAME/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
-        fi
-        echo "ADMIN_USERNAME='$ADMIN_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-
-    if ! grep "^ADMIN_PASSWORD='$ADMIN_PASSWORD'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        if grep "^ADMIN_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-        then
-            sed -i '/^ADMIN_PASSWORD/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
-        fi
-        echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-
-    if ! grep "^USER_USERNAME='$USER_USERNAME'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        if grep "^USER_USERNAME=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-        then
-            sed -i '/^USER_USERNAME/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
-        fi
-        echo "USER_USERNAME='$USER_USERNAME'" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-
-    if ! grep "^USER_PASSWORD='$USER_PASSWORD'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        if grep "^USER_PASSWORD=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-        then
-            sed -i '/^USER_PASSWORD/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
-        fi
-        echo "USER_PASSWORD='$USER_PASSWORD'" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-
-    if ! grep "^TIMEZONE='$TIMEZONE'" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        if grep "^TIMEZONE=" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-        then
-            sed -i '/^TIMEZONE/d' $INSTALLATION_VARIABLES_FILE &>/dev/null
-        fi
-        echo "TIMEZONE='$TIMEZONE'" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-
-    if ! grep "^FIRMWARE_PACKAGES" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        echo "FIRMWARE_PACKAGES=()" >> "$INSTALLATION_VARIABLES_FILE"
-    fi
-}
-
-populate_installation_variables_file
 
 create_luks_keyfile_on_usb()
 {
@@ -840,8 +785,6 @@ find_correct_firmware()
         [[ $? -ne 0 ]] && exit 1
     fi
 
-    local firmware_packages=()
-
     # GPU firmware
     local LSPCI_OUTPUT="$(lspci -nn)"
 
@@ -851,51 +794,51 @@ find_correct_firmware()
         if echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" \
             | grep "Advanced Micro Devices" &>/dev/null
         then
-            if ! echo "${firmware_packages[*]}" | grep "firmware-amd-graphics" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-amd-graphics" &>/dev/null
             then
-                firmware_packages+=(firmware-amd-graphics)
+                FIRMWARE_PACKAGES+=(firmware-amd-graphics)
             fi
-            if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
             then
-                firmware_packages+=(mesa-vulkan-drivers)
+                FIRMWARE_PACKAGES+=(mesa-vulkan-drivers)
             fi
         elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel"
         then
-            if ! echo "${firmware_packages[*]}" | grep "firmware-misc-nonfree" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-misc-nonfree" &>/dev/null
             then
-                firmware_packages+=(firmware-misc-nonfree)
+                FIRMWARE_PACKAGES+=(firmware-misc-nonfree)
             fi
-            if ! echo "${firmware_packages[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "mesa-vulkan-drivers" &>/dev/null
             then
-                firmware_packages+=(mesa-vulkan-drivers)
+                FIRMWARE_PACKAGES+=(mesa-vulkan-drivers)
             fi
         fi
     fi
         # REQUIRES non-free in apt sources... not sure if I want to support that yet
         #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia"
         #    then
-        #        if ! echo "${firmware_packages[*]}" | grep "nvidia-driver" &>/dev/null
+        #        if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "nvidia-driver" &>/dev/null
         #        then
-        #            firmware_packages+=(nvidia-driver)
+        #            FIRMWARE_PACKAGES+=(nvidia-driver)
         #        fi
-        #        if ! echo "${firmware_packages[*]}" | grep "firmware-nvidia-gsp" &>/dev/null
+        #        if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-nvidia-gsp" &>/dev/null
         #        then
-        #            firmware_packages+=(firmware-nvidia-gsp)
+        #            FIRMWARE_PACKAGES+=(firmware-nvidia-gsp)
         #        fi
         #    fi
 
     # CPU microcode
     if cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "amd" &>/dev/null
     then
-        if ! echo "${firmware_packages[*]}" | grep "amd64-microcode" &>/dev/null
+        if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "amd64-microcode" &>/dev/null
         then
-            firmware_packages+=(amd64-microcode)
+            FIRMWARE_PACKAGES+=(amd64-microcode)
         fi
     elif cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "intel"
     then
-        if ! echo "${firmware_packages[*]}" | grep "intel-microcode" &>/dev/null
+        if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "intel-microcode" &>/dev/null
         then
-            firmware_packages+=(intel-microcode)
+            FIRMWARE_PACKAGES+=(intel-microcode)
         fi
     fi
 
@@ -904,42 +847,30 @@ find_correct_firmware()
     then
         if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "mediatek" &>/dev/null
         then
-            if ! echo "${firmware_packages[*]}" | grep "firmware-mediatek" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-mediatek" &>/dev/null
             then
-                firmware_packages+=(firmware-mediatek)
+                FIRMWARE_PACKAGES+=(firmware-mediatek)
             fi
         fi
 
         if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "iwlwifi" &>/dev/null
         then
-            if ! echo "${firmware_packages[*]}" | grep "firmware-iwlwifi" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-iwlwifi" &>/dev/null
             then
-                firmware_packages+=(firmware-iwlwifi)
+                FIRMWARE_PACKAGES+=(firmware-iwlwifi)
             fi
         fi
 
         if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "realtek" &>/dev/null
         then
-            if ! echo "${firmware_packages[*]}" | grep "firmware-realtek" &>/dev/null
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-realtek" &>/dev/null
             then
-                firmware_packages+=(firmware-realtek)
+                FIRMWARE_PACKAGES+=(firmware-realtek)
             fi
         fi
     fi
 
-    if ! grep "^FIRMWARE_PACKAGES=(${firmware_packages[*]})$" "$INSTALLATION_VARIABLES_FILE" &>/dev/null
-    then
-        sed -i '/^FIRMWARE_PACKAGES=/d' "$INSTALLATION_VARIABLES_FILE" \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Remove old FIRMWARE_PACKAGES entry in the installation variables file"
-        [[ $? -ne 0 ]] && exit 1
-        echo "FIRMWARE_PACKAGES=(${firmware_packages[*]})" \
-            >> "$INSTALLATION_VARIABLES_FILE" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Add the new firmware packages to the installation variables file: (${firmware_packages[*]})"
-        [[ $? -ne 0 ]] && exit 1
-    fi
+    declare -r FIRMWARE_PACKAGES
 }
 
 install_debootstrap()
@@ -1045,26 +976,66 @@ copy_necessary_project_files_to_new_system()
             "Copy 'finish_install.sh' to the new system"
         [[ $? -ne 0 ]] && exit 1
     fi
+}
 
-    if ! cmp -s $INSTALLATION_VARIABLES_FILE \
-        /mnt/$(basename $INSTALLATION_VARIABLES_FILE) &>/dev/null
+export_necessary_variables()
+{
+    local failed_variables=()
+    export OVERWRITE_HOME_PARTITION \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("OVERWRITE_HOME_PARTITION")
+    export ADMIN_USERNAME \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("ADMIN_USERNAME")
+    export ADMIN_PASSWORD \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("ADMIN_PASSWORD")
+    export USER_USERNAME \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("USER_USERNAME")
+    export USER_PASSWORD \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("USER_PASSWORD")
+    export TIMEZONE \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("TIMEZONE")
+    export FIRMWARE_PACKAGES \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("FIRMWARE_PACKAGES")
+
+    export LUKS_KEYFILE_PARTITION \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("LUKS_KEYFILE_PARTITION")
+    export LUKS_PASSWORD \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("LUKS_PASSWORD")
+    export USE_KEYFILE_AT_BOOT \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("USE_KEYFILE_AT_BOOT")
+
+    export DESKTOP_ENVIRONMENT \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("DESKTOP_ENVIRONMENT")
+
+    export APT_CACHE_SERVER \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("APT_CACHE_SERVER")
+    export APT_CACHE_FILE \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("APT_CACHE_FILE")
+
+
+    if [[ -n "${failed_variables[@]}" ]]
     then
-        cp $INSTALLATION_VARIABLES_FILE /mnt/ \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Copy '$INSTALLATION_VARIABLES_FILE' to the new system"
-        [[ $? -ne 0 ]] && exit 1
+        printf "\n\e[31m%s\e[0m\n" \
+            "Couldn't export variables: ${failed_variables[@]}"
+        exit 1
     fi
 
-    if ! cmp -s $INSTALL_CONSTANTS_FILE \
-        /mnt/$(basename $INSTALL_CONSTANTS_FILE) &>/dev/null
-    then
-        cp $INSTALL_CONSTANTS_FILE /mnt/ \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "Copy '$INSTALL_CONSTANTS_FILE' to the new system"
-        [[ $? -ne 0 ]] && exit 1
-    fi
+    printf "\r\e[32m[Success]\e[0m %s\n" \
+        "Export variables for finish_install.sh"
+
+    return 0
 }
 
 if [[ "$ENCRYPT_SYSTEM" == "y" ]]
@@ -1137,5 +1108,6 @@ run_debootstrap
 generate_fstab_file
 set_hostname
 copy_necessary_project_files_to_new_system
+export_necessary_variables
 
 arch-chroot /mnt /bin/bash finish_install.sh

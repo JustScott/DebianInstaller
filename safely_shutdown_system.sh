@@ -17,8 +17,6 @@
 
 PRETTY_OUTPUT_LIBRARY=./DebianInstaller/pretty_output_library.sh
 
-INSTALL_CONSTANTS_FILE=/mnt/install_constants
-INSTALLATION_VARIABLES_FILE=/mnt/activate_installation_variables.sh
 COMPLETION_FILE=/mnt/finish_install_completion.txt
 FINISH_INSTALL_SCRIPT=/mnt/finish_install.sh
 NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY=/mnt/pretty_output_library.sh
@@ -34,22 +32,6 @@ fi
 
 remove_sensitive_files()
 {
-    if [[ -f "$INSTALL_CONSTANTS_FILE" ]]
-    then
-        rm $INSTALL_CONSTANTS_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "remove sensitive file: $INSTALL_CONSTANTS_FILE"
-        [[ $? -ne 0 ]] && return 1
-    fi
-
-    if [[ -f "$INSTALLATION_VARIABLES_FILE" ]]
-    then
-        rm $INSTALLATION_VARIABLES_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" \
-            "remove sensitive file: $INSTALLATION_VARIABLES_FILE"
-        [[ $? -ne 0 ]] && return 1
-    fi
-
     if [[ -f "$COMPLETION_FILE" ]]
     then
         rm $COMPLETION_FILE >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
