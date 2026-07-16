@@ -87,6 +87,13 @@ check_required_install_constants()
         return 1
     fi
 
+    if [[ -z "$HOSTNAME" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$HOSTNAME constant not set, this is fatal...stopping"
+        return 1
+    fi
+
     if [[ -z "$ADMIN_USERNAME" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
@@ -932,17 +939,18 @@ generate_fstab_file()
 
 set_hostname()
 {
-    if ! grep "^set_hostname$" $COMPLETION_FILE &>/dev/null
+    if [[ "$(cat /mnt/etc/hostname)" != "$HOSTNAME" ]]
     then
-        echo "debian" > /mnt/etc/hostname &
+        echo "$HOSTNAME" > /mnt/etc/hostname &
         task_output $! "$STDERR_LOG_PATH" "Set the hostname to 'debian'"
         [[ $? -ne 0 ]] && exit 1
+    fi
 
-        echo -e "127.0.0.1 localhost\n127.0.1.1 debian" > /mnt/etc/hosts &
+    if ! grep "^127.0.1.1 ${HOSTNAME}$" /mnt/etc/hosts &>/dev/null
+    then
+        echo -e "127.0.0.1 localhost\n127.0.1.1 $HOSTNAME" > /mnt/etc/hosts &
         task_output $! "$STDERR_LOG_PATH" "Populate the '/etc/hosts' file"
         [[ $? -ne 0 ]] && exit 1
-
-        echo "set_hostname" >> $COMPLETION_FILE
     fi
 }
 

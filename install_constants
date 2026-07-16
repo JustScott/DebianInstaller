@@ -1,3 +1,5 @@
+declare -r HOSTNAME='debian' # Cannot be left empty
+
 declare -r ADMIN_USERNAME='administrator'
 declare -r ADMIN_PASSWORD='test' # Cannot be left empty
 
