@@ -11,6 +11,7 @@ declare -r TIMEZONE='America/Chicago'
 declare -r ENABLE_WIFI='y' # set to 'n' for systems using only ethernet
 
 # Manually partition with cfdisk, then update partition names here
+declare -r DISK="/dev/vda"
 declare -r EFI_PARTITION="/dev/vda1"   # 1GB (EFI system)
 declare -r BOOT_PARTITION="/dev/vda2"  # 1GB (Linux filesystem)
 declare -r ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system packages (Linux filesystem)

@@ -55,6 +55,12 @@ fi
 
 check_required_install_constants()
 {
+    if [[ -z "$DISK" ]]
+    then
+        printf "\n\e[31m%s\e[0m\n" \
+            "[!] \$DISK constant not set, this is fatal...stopping"
+        return 1
+    fi
     if [[ -z "$EFI_PARTITION" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
@@ -1115,6 +1121,9 @@ copy_necessary_project_files_to_new_system()
 export_necessary_variables()
 {
     local failed_variables=()
+    export DISK \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("DISK")
     export OVERWRITE_HOME_PARTITION \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("OVERWRITE_HOME_PARTITION")
