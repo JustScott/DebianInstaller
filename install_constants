@@ -17,6 +17,16 @@ declare -r ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system pack
 declare -r HOME_PARTITION="/dev/vda4"  # Remaining space for user packages (Linux filesystem)
 declare -r OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
 
+# SKIP_INSTALLING_PACKAGES='y' is what OVERWRITE_ROOT_PARTITION='n' would've
+# been. While the root partition is largely overwritten, it's just not formatted
+# causing total deletion of all data, like packages.
+#
+# 'y' means no packages are installed (other than arch-install-scripts). 
+# Useful when you want to use the installer to change your password, hostname,
+# etc, or you want to add a new luks encryption method. Saves time not 
+# reinstalling gnome and all the other large packages.
+declare -r SKIP_INSTALLING_PACKAGES='n' # cannot be left empty
+
 # Leave both empty for no encryption, set one for a single method of encryption,
 # or set both to use the keyfile as a primary method of encryption, and the password
 # as a secondary emergency backup method (from a live environment, no prompt on boot)

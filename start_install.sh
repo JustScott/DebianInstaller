@@ -138,6 +138,19 @@ check_required_install_constants()
         return 1
     fi
 
+    OVERWRITE_ROOT_PARTITION='y'
+    if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' && "$SKIP_INSTALLING_PACKAGES" != 'n' ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$SKIP_INSTALLING_PACKAGES constant must be 'y' or 'n'," \
+            "this is fatal...stopping"
+        return 1
+    elif [[ "$SKIP_INSTALLING_PACKAGES" == 'y' ]]
+    then
+        OVERWRITE_ROOT_PARTITION='n'
+    fi
+    declare -r OVERWRITE_ROOT_PARTITION
+
     if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
     then
         if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
@@ -409,6 +422,96 @@ luks_open_root()
     fi
 }
 
+luks_open_root()
+{
+    if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
+    then
+        cryptsetup close crypt_root &>/dev/null
+
+        if [[ -n "$LUKS_PASSWORD" && -z "$LUKS_KEYFILE_PARTITION" ]]
+        then
+            echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $ROOT_PARTITION \
+                crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted root partition with passphrase"
+            if [[ $? -ne 0 ]]
+            then
+                if [[ "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
+                then
+                    printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                        "Probably used the wrong partition passphrase, try" \
+                        "changing it in install_constants"
+                fi
+                exit 1
+            fi
+        elif [[ -n "$LUKS_KEYFILE_PARTITION" && -z "$LUKS_PASSWORD" ]]
+        then
+            cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+                $ROOT_PARTITION crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted root partition with USB keyfile"
+            if [[ $? -ne 0 ]]
+            then
+                if [[ "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
+                then
+                    printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                        "Probably used the wrong partition passphrase, try" \
+                        "changing it in install_constants"
+                fi
+                exit 1
+            fi
+        elif [[ -n "$LUKS_PASSWORD" && -n "$LUKS_KEYFILE_PARTITION" ]]
+        then
+            cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
+                $ROOT_PARTITION crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "open luks encrypted root partition with USB keyfile"
+            local luks_open_return_code=$?
+            if [[ $luks_open_return_code -eq 0 && "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
+            then
+                cryptsetup close crypt_root &>/dev/null
+                echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $ROOT_PARTITION \
+                    crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" \
+                    "open luks encrypted root partition with passphrase"
+                if [[ $? -ne 0 ]]
+                then
+                    printf "\n\e[36m%s %s\e[0m\n\n" "[TIP]" \
+                        "It's okay if this fails, as long as subsequent steps don't"
+                    luks_add_passphrase_to_root
+                    luks_open_root
+                fi
+            elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
+            then
+                echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $ROOT_PARTITION \
+                    crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+                task_output $! "$STDERR_LOG_PATH" \
+                    "open luks encrypted root partition with passphrase"
+                if [[ $? -eq 0 ]]
+                then
+                    luks_add_keyfile_to_root
+                else
+                    printf "\n\n\e[36m%s %s %s %s\e[0m\n" "[TIP]" \
+                        "Neither the passphrase nor the keyfile could unlock" \
+                        "the root partition. Did you mean to set" \
+                        "SKIP_INSTALLING_PACKAGES='y' in install_constants?"
+                    exit 1
+                fi
+            elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
+            then
+                printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
+                    "The root partition is being overwritten, so this luksOpen" \
+                    "step should never fail. Must be a logic error."
+                exit 1
+            fi
+        fi
+
+        echo "luksOpenRoot" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
 luks_open_home()
 {
     if ! grep "^luksOpenHome$" $COMPLETION_FILE &>/dev/null
@@ -537,14 +640,17 @@ format_partitions()
         fi
     fi
 
-    if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
+    if [[ "$OVERWRITE_ROOT_PARTITION" = 'y' ]]
     then
-        echo 'y' | mkfs.ext4 "$root_partition" \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Format root partition ($ROOT_PARTITION) with EXT4"
-        [[ $? -ne 0 ]] && exit 1
+        if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
+        then
+            echo 'y' | mkfs.ext4 "$root_partition" \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Format root partition ($ROOT_PARTITION) with EXT4"
+            [[ $? -ne 0 ]] && exit 1
 
-        echo "mkfs_root" >> $COMPLETION_FILE
+            echo "mkfs_root" >> $COMPLETION_FILE
+        fi
     fi
 }
 
@@ -692,6 +798,12 @@ configure_swap()
 
         if ! grep "^mkswap$" $COMPLETION_FILE &>/dev/null
         then
+            if [[ -f "/mnt/swapfile" ]]
+            then
+                swapoff /mnt/swapfile &>/dev/null
+                rm /mnt/swapfile &>/dev/null
+            fi
+
             mkswap -U clear --size ${SWAP_SIZE_IN_GB}G --file /mnt/swapfile \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Create ${SWAP_SIZE_IN_GB}GB swapfile"
@@ -880,14 +992,28 @@ find_correct_firmware()
     declare -r FIRMWARE_PACKAGES
 }
 
+install_installer_scripts()
+{
+    if ! grep "^apt_install_installer_scripts$" $COMPLETION_FILE &>/dev/null
+    then
+        apt-get install --yes arch-install-scripts \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Install arch-install-scripts"
+        [[ $? -ne 0 ]] && exit 1
+
+        echo "apt_install_installer_scripts" >> $COMPLETION_FILE
+    fi
+}
+
 install_debootstrap()
 {
     if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
     then
-        apt-get install --yes arch-install-scripts debootstrap \
+        apt-get install --yes debootstrap \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "Install arch-install-scripts and debootstrap"
+            "Install debootstrap"
         [[ $? -ne 0 ]] && exit 1
 
         echo "apt_install_debootstrap" >> $COMPLETION_FILE
@@ -1011,6 +1137,10 @@ export_necessary_variables()
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("FIRMWARE_PACKAGES")
 
+    export SKIP_INSTALLING_PACKAGES \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("SKIP_INSTALLING_PACKAGES")
+
     export LUKS_KEYFILE_PARTITION \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("LUKS_KEYFILE_PARTITION")
@@ -1051,8 +1181,11 @@ then
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
         create_luks_keyfile_on_usb
-        luks_format_root_with_keyfile
 
+        if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
+        then
+            luks_format_root_with_keyfile
+        fi
         if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
         then
             luks_format_home_with_keyfile
@@ -1063,19 +1196,28 @@ then
     then
         luks_open_home
     fi
+    if [[ "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
+    then
+        luks_open_root
+    fi
 
     if [[ -n "$LUKS_PASSWORD" ]]
     then
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
         then
-            luks_add_passphrase_to_root
+            if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
+            then
+                luks_add_passphrase_to_root
+            fi
             if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
             then
                 luks_add_passphrase_to_home
             fi
         else
-            luks_format_root_with_passphrase
-
+            if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
+            then
+                luks_format_root_with_passphrase
+            fi
             if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
             then
                 luks_format_home_with_passphrase
@@ -1087,8 +1229,10 @@ then
     then
         luks_open_home
     fi
-
-    luks_open_root
+    if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
+    then
+        luks_open_root
+    fi
 
     # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
@@ -1098,6 +1242,8 @@ then
 elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
 then
     # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
+    #
+    # Doesn't overwrite root if "$SKIP_INSTALLING_PACKAGES" == 'y'
     format_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
     mount_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
 else
@@ -1107,12 +1253,19 @@ fi
 
 configure_swap
 set_timezone "$TIMEZONE"
+
 set_apt_cache_server
 copy_apt_sources_to_live_system
 apt_update
-find_correct_firmware
-install_debootstrap
-run_debootstrap
+install_installer_scripts
+
+if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
+then
+    find_correct_firmware
+    install_debootstrap
+    run_debootstrap
+fi
+
 generate_fstab_file
 set_hostname
 copy_necessary_project_files_to_new_system

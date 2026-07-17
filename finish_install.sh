@@ -96,6 +96,14 @@ check_required_install_constants()
         return 1
     fi
 
+    if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' && "$SKIP_INSTALLING_PACKAGES" != 'n' ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" \
+            "[!] \$SKIP_INSTALLING_PACKAGES constant must be 'y' or 'n'," \
+            "this is fatal...stopping"
+        return 1
+    fi
+
     if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
     then
         if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
@@ -569,9 +577,11 @@ enable_systemd_services()
     fi
 }
 
-
-add_apt_proxy_if_enabled
-update_apt
+if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
+then
+    add_apt_proxy_if_enabled
+    update_apt
+fi
 
 debconf-set-selections > /dev/null 2>&1 <<EOF
 keyboard-configuration keyboard-configuration/layoutcode string us
@@ -580,9 +590,13 @@ keyboard-configuration keyboard-configuration/variantcode string
 console-setup console-setup/charmap47 select UTF-8
 EOF
 
-install_firmware
-install_desktop_environment
-install_general_system_packages
+if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
+then
+    install_firmware
+    install_desktop_environment
+    install_general_system_packages
+fi
+
 set_timezone
 configure_locale
 set_plymouth_theme
