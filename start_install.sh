@@ -534,8 +534,9 @@ luks_open_home()
             then
                 if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
                 then
-                    printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
-                        "Probably used the wrong partition passphrase, try" \
+                    printf "\n\n\e[36m%s %s %s %s\e[0m\n" "[TIP]" \
+                        "Probably used the wrong partition passphrase, or set" \
+                        "OVERWRITE_HOME_PARTITION='n' when you meant 'y', try"
                         "changing it in install_constants"
                 fi
                 exit 1
