@@ -591,24 +591,37 @@ format_partitions()
     local home_partition="$1"
     local root_partition="$2"
 
-    if ! grep "^mkfs_efi$" $COMPLETION_FILE &>/dev/null
+    if [[ "$OVERWRITE_ROOT_PARTITION" = 'y' ]]
     then
-        echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Format EFI partition ($EFI_PARTITION) with FAT32"
-        [[ $? -ne 0 ]] && exit 1
+        if ! grep "^mkfs_efi$" $COMPLETION_FILE &>/dev/null
+        then
+            echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Format EFI partition ($EFI_PARTITION) with FAT32"
+            [[ $? -ne 0 ]] && exit 1
 
-        echo "mkfs_efi" >> $COMPLETION_FILE
-    fi
+            echo "mkfs_efi" >> $COMPLETION_FILE
+        fi
 
-    if ! grep "^mkfs_boot$" $COMPLETION_FILE &>/dev/null
-    then
-        echo 'y' | mkfs.ext4 $BOOT_PARTITION \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-        task_output $! "$STDERR_LOG_PATH" "Format boot partition ($BOOT_PARTITION) with EXT4"
-        [[ $? -ne 0 ]] && exit 1
+        if ! grep "^mkfs_boot$" $COMPLETION_FILE &>/dev/null
+        then
+            echo 'y' | mkfs.ext4 $BOOT_PARTITION \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Format boot partition ($BOOT_PARTITION) with EXT4"
+            [[ $? -ne 0 ]] && exit 1
 
-        echo "mkfs_boot" >> $COMPLETION_FILE
+            echo "mkfs_boot" >> $COMPLETION_FILE
+        fi
+
+        if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
+        then
+            echo 'y' | mkfs.ext4 "$root_partition" \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Format root partition ($ROOT_PARTITION) with EXT4"
+            [[ $? -ne 0 ]] && exit 1
+
+            echo "mkfs_root" >> $COMPLETION_FILE
+        fi
     fi
 
     if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
@@ -621,19 +634,6 @@ format_partitions()
             [[ $? -ne 0 ]] && exit 1
 
             echo "mkfs_home" >> $COMPLETION_FILE
-        fi
-    fi
-
-    if [[ "$OVERWRITE_ROOT_PARTITION" = 'y' ]]
-    then
-        if ! grep "^mkfs_root$" $COMPLETION_FILE &>/dev/null
-        then
-            echo 'y' | mkfs.ext4 "$root_partition" \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" "Format root partition ($ROOT_PARTITION) with EXT4"
-            [[ $? -ne 0 ]] && exit 1
-
-            echo "mkfs_root" >> $COMPLETION_FILE
         fi
     fi
 }
