@@ -409,29 +409,6 @@ luks_open_root()
 {
     if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
-        then
-            echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $ROOT_PARTITION \
-                crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "open luks encrypted root partition with passphrase"
-            [[ $? -ne 0 ]] && exit 1
-        else
-            cryptsetup open --key-file /media/keyfile_usb/luks_keyfile \
-                $ROOT_PARTITION crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "open luks encrypted root partition with USB keyfile"
-            [[ $? -ne 0 ]] && exit 1
-        fi
-
-        echo "luksOpenRoot" >> $COMPLETION_FILE
-    fi
-}
-
-luks_open_root()
-{
-    if ! grep "^luksOpenRoot$" $COMPLETION_FILE &>/dev/null
-    then
         cryptsetup close crypt_root &>/dev/null
 
         if [[ -n "$LUKS_PASSWORD" && -z "$LUKS_KEYFILE_PARTITION" ]]
