@@ -928,7 +928,7 @@ find_correct_firmware()
             then
                 FIRMWARE_PACKAGES+=(mesa-vulkan-drivers)
             fi
-        elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel"
+        elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "intel" &>/dev/null
         then
             if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-misc-nonfree" &>/dev/null
             then
@@ -992,6 +992,14 @@ find_correct_firmware()
             if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-realtek" &>/dev/null
             then
                 FIRMWARE_PACKAGES+=(firmware-realtek)
+            fi
+        fi
+
+        if echo "$LSPCI_OUTPUT" | grep "Network controller" | grep -i "qualcomm atheros" &>/dev/null
+        then
+            if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "firmware-atheros" &>/dev/null
+            then
+                FIRMWARE_PACKAGES+=(firmware-atheros)
             fi
         fi
     fi
