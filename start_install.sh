@@ -1128,7 +1128,9 @@ export_necessary_variables()
     export TIMEZONE \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("TIMEZONE")
-    export FIRMWARE_PACKAGES \
+
+    FIRMWARE_PACKAGES_STRING="${FIRMWARE_PACKAGES[@]}"
+    export FIRMWARE_PACKAGES_STRING \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("FIRMWARE_PACKAGES")
 

@@ -188,14 +188,14 @@ update_apt()
 
 install_firmware()
 {
-    if [[ "${#FIRMWARE_PACKAGES[@]}" -gt 0 ]]
+    if [[ -n "$FIRMWARE_PACKAGES_STRING" ]]
     then
-        if ! dpkg -s ${FIRMWARE_PACKAGES[@]} &>/dev/null
+        if ! dpkg -s $FIRMWARE_PACKAGES_STRING &>/dev/null
         then
-            apt-get install --yes ${FIRMWARE_PACKAGES[@]} \
+            apt-get install --yes $FIRMWARE_PACKAGES_STRING \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
-                "Install firmware packages: (${FIRMWARE_PACKAGES[*]})"
+                "Install firmware packages: ($FIRMWARE_PACKAGES_STRING)"
             [[ $? -ne 0 ]] && exit 1
         fi
     fi
