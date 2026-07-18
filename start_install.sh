@@ -918,7 +918,7 @@ find_correct_firmware()
         fi
     fi
         # REQUIRES non-free in apt sources... not sure if I want to support that yet
-        #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia"
+        #    elif echo "$LSPCI_OUTPUT" | grep "VGA compatible controller" | grep -i "nvidia" &>/dev/null
         #    then
         #        if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "nvidia-driver" &>/dev/null
         #        then
@@ -937,7 +937,7 @@ find_correct_firmware()
         then
             FIRMWARE_PACKAGES+=(amd64-microcode)
         fi
-    elif cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "intel"
+    elif cat /proc/cpuinfo | grep -m1 -i "vendor_id" | grep -i "intel" &>/dev/null
     then
         if ! echo "${FIRMWARE_PACKAGES[*]}" | grep "intel-microcode" &>/dev/null
         then
