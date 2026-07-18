@@ -1232,6 +1232,8 @@ then
     fi
 
     # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
+    #
+    # Doesn't overwrite root if "$SKIP_INSTALLING_PACKAGES" == 'y'
     format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
     mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
 
