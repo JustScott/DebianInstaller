@@ -20,7 +20,9 @@ PRETTY_OUTPUT_LIBRARY=./DebianInstaller/pretty_output_library.sh
 COMPLETION_FILE=/mnt/finish_install_completion.txt
 FINISH_INSTALL_SCRIPT=/mnt/finish_install.sh
 NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY=/mnt/pretty_output_library.sh
-NEW_SYSTEM_STDERR_LOG_PATH=/mnt/debianinstallererrors.log
+
+NEW_SYSTEM_STDOUT_LOG_PATH=/mnt/finish_install_stdout.log
+NEW_SYSTEM_STDERR_LOG_PATH=/mnt/finish_install_stderr.log
 
 if ! source $PRETTY_OUTPUT_LIBRARY &>/dev/null
 then
@@ -29,6 +31,9 @@ then
         "to run \`bash ./DebianInstaller/start_install.sh\`"
     exit 1
 fi
+
+STDOUT_LOG_PATH="/safely_shutdown_stdout.log"
+STDERR_LOG_PATH="/safely_shutdown_stderr.log"
 
 remove_sensitive_files()
 {
@@ -53,6 +58,14 @@ remove_sensitive_files()
         rm $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "remove sensitive file: $NEW_SYSTEM_PRETTY_OUTPUT_LIBRARY"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    if [[ -f "$NEW_SYSTEM_STDOUT_LOG_PATH" ]]
+    then
+        rm $NEW_SYSTEM_STDOUT_LOG_PATH >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "remove sensitive file: $NEW_SYSTEM_STDOUT_LOG_PATH"
         [[ $? -ne 0 ]] && return 1
     fi
 

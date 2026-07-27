@@ -16,11 +16,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-STDOUT_LOG_PATH="/dev/null"
-STDERR_LOG_PATH="/tmp/debianinstallererrors.log"
-
 # Function to show a spinner and handle exit status
 task_output() {
+    if [[ -z "$STDOUT_LOG_PATH" ]]
+    then
+        printf "\n\e[31m[FATAL ERROR]\e[0m %s\n" \
+            "\$STDOUT_LOG_PATH variable empty in task_output"
+        exit 1
+    fi
+
+    if [[ -z "$STDERR_LOG_PATH" ]]
+    then
+        printf "\n\e[31m[FATAL ERROR]\e[0m %s\n" \
+            "\$STDERR_LOG_PATH variable empty in task_output"
+        exit 1
+    fi
+
     local pid=$1
     local stderr_path=$2
     local task_message="$3"

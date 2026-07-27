@@ -48,7 +48,8 @@ then
     exit 1
 fi
 
-declare -r STDERR_LOG_PATH="/debianinstallererrors.log"
+STDOUT_LOG_PATH="/finish_install_stdout.log"
+STDERR_LOG_PATH="/finish_install_stderr.log"
 
 check_required_install_constants()
 {

@@ -47,6 +47,9 @@ then
     exit 1
 fi
 
+STDOUT_LOG_PATH="/tmp/start_install_stdout.log"
+STDERR_LOG_PATH="/tmp/start_install_stderr.log"
+
 if [[ "$(whoami)" != "root" ]]
 then
     printf "\n\e[31m%s\e[0m\n" "[!] Must run script as root"
