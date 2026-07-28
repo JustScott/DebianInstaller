@@ -158,7 +158,6 @@ check_required_install_constants()
     then
         OVERWRITE_ROOT_PARTITION='n'
     fi
-    declare -r OVERWRITE_ROOT_PARTITION
 
     if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
     then
@@ -174,13 +173,13 @@ check_required_install_constants()
     return 0
 }
 
-check_required_install_constants || exit 1
+check_required_install_constants || exit $?
 
 if [[ -n "$LUKS_PASSWORD" || -n "$LUKS_KEYFILE_PARTITION" ]]
 then
-    declare -r ENCRYPT_SYSTEM='y'
+    ENCRYPT_SYSTEM='y'
 else
-    declare -r ENCRYPT_SYSTEM='n'
+    ENCRYPT_SYSTEM='n'
 fi
 
 check_for_cache_server()
@@ -204,7 +203,7 @@ check_for_cache_server()
     return 0
 }
 
-check_for_cache_server || exit 1
+check_for_cache_server || exit $?
 
 create_luks_keyfile_on_usb()
 {
@@ -213,7 +212,7 @@ create_luks_keyfile_on_usb()
         echo 'y' | mkfs.fat -F 32 -n "keyfile_usb" $LUKS_KEYFILE_PARTITION \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Format keyfile_usb partition with FAT32"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! [[ -d /media/keyfile_usb ]]
@@ -221,7 +220,7 @@ create_luks_keyfile_on_usb()
         mount --mkdir /dev/disk/by-label/keyfile_usb /media/keyfile_usb \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Mount keyfile_usb partition"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! [[ -f /media/keyfile_usb/luks_keyfile ]]
@@ -229,13 +228,15 @@ create_luks_keyfile_on_usb()
         dd if=/dev/urandom of=/media/keyfile_usb/luks_keyfile bs=1024 count=2 \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Create luks_keyfile on keyfile_usb"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         chmod 400 /media/keyfile_usb/luks_keyfile \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Set permissions on luks_keyfile (400)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 luks_format_root_with_keyfile()
@@ -246,7 +247,7 @@ luks_format_root_with_keyfile()
             --batch-mode $ROOT_PARTITION \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "luksFormat root ($ROOT_PARTITION) with USB keyfile"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksFormatRootWithKeyfile" >> $COMPLETION_FILE
     fi
@@ -262,7 +263,7 @@ luks_format_home_with_keyfile()
             --batch-mode $HOME_PARTITION \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "luksFormat home ($HOME_PARTITION) with USB keyfile"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksFormatHomeWithKeyfile" >> $COMPLETION_FILE
     fi
@@ -275,7 +276,7 @@ luks_format_root_with_passphrase() {
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksFormatRootWithPassphrase$" $COMPLETION_FILE &>/dev/null
@@ -283,7 +284,7 @@ luks_format_root_with_passphrase() {
         echo -n "$LUKS_PASSWORD" | cryptsetup luksFormat -s 512 -h sha512 \
             --key-file=- $ROOT_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "luksFormat root ($ROOT_PARTITION) with passphrase"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksFormatRootWithPassphrase" >> $COMPLETION_FILE
     fi
@@ -296,7 +297,7 @@ luks_format_home_with_passphrase() {
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksFormatHomeWithPassphrase$" $COMPLETION_FILE &>/dev/null
@@ -304,7 +305,7 @@ luks_format_home_with_passphrase() {
         echo -n "$LUKS_PASSWORD" | cryptsetup luksFormat -s 512 -h sha512 \
             --key-file=- $HOME_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "luksFormat home ($HOME_PARTITION) with passphrase"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksFormatHomeWithPassphrase" >> $COMPLETION_FILE
     fi
@@ -318,7 +319,7 @@ luks_add_passphrase_to_root()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksAddPassphraseToRoot$" $COMPLETION_FILE &>/dev/null
@@ -328,7 +329,7 @@ luks_add_passphrase_to_root()
             $ROOT_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Add LUKS passphrase to root ($ROOT_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksAddPassphraseToRoot" >> $COMPLETION_FILE
     fi
@@ -342,7 +343,7 @@ luks_add_passphrase_to_home()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksAddPassphraseToHome$" $COMPLETION_FILE &>/dev/null
@@ -352,7 +353,7 @@ luks_add_passphrase_to_home()
             $HOME_PARTITION >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Add LUKS passphrase to home ($HOME_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksAddPassphraseToHome" >> $COMPLETION_FILE
     fi
@@ -366,7 +367,7 @@ luks_add_keyfile_to_root()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksAddKeyFileToRoot$" $COMPLETION_FILE &>/dev/null
@@ -376,7 +377,7 @@ luks_add_keyfile_to_root()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Add LUKS keyfile to root ($ROOT_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksAddKeyFileToRoot" >> $COMPLETION_FILE
     fi
@@ -390,7 +391,7 @@ luks_add_keyfile_to_home()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
             "Luks password not set in 'install_constants' file"
-        exit 1
+        return 1
     fi
 
     if ! grep "^luksAddKeyFileToHome$" $COMPLETION_FILE &>/dev/null
@@ -400,7 +401,7 @@ luks_add_keyfile_to_home()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Add LUKS keyfile to home ($HOME_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "luksAddKeyFileToHome" >> $COMPLETION_FILE
     fi
@@ -428,7 +429,7 @@ luks_open_root()
                         "Probably used the wrong partition passphrase, try" \
                         "changing it in install_constants"
                 fi
-                exit 1
+                return 1
             fi
         elif [[ -n "$LUKS_KEYFILE_PARTITION" && -z "$LUKS_PASSWORD" ]]
         then
@@ -444,7 +445,7 @@ luks_open_root()
                         "Probably used the wrong partition passphrase, try" \
                         "changing it in install_constants"
                 fi
-                exit 1
+                return 1
             fi
         elif [[ -n "$LUKS_PASSWORD" && -n "$LUKS_KEYFILE_PARTITION" ]]
         then
@@ -481,14 +482,14 @@ luks_open_root()
                         "Neither the passphrase nor the keyfile could unlock" \
                         "the root partition. Did you mean to set" \
                         "SKIP_INSTALLING_PACKAGES='y' in install_constants?"
-                    exit 1
+                    return 1
                 fi
             elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
             then
                 printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
                     "The root partition is being overwritten, so this luksOpen" \
                     "step should never fail. Must be a logic error."
-                exit 1
+                return 1
             fi
         fi
 
@@ -519,7 +520,7 @@ luks_open_home()
                         "OVERWRITE_HOME_PARTITION='n' when you meant 'y', try"
                         "changing it in install_constants"
                 fi
-                exit 1
+                return 1
             fi
         elif [[ -n "$LUKS_KEYFILE_PARTITION" && -z "$LUKS_PASSWORD" ]]
         then
@@ -535,7 +536,7 @@ luks_open_home()
                         "Probably used the wrong partition passphrase, try" \
                         "changing it in install_constants"
                 fi
-                exit 1
+                return 1
             fi
         elif [[ -n "$LUKS_PASSWORD" && -n "$LUKS_KEYFILE_PARTITION" ]]
         then
@@ -572,14 +573,14 @@ luks_open_home()
                         "Neither the passphrase nor the keyfile could unlock" \
                         "the home partition. Did you mean to set" \
                         "OVERWRITE_HOME_PARTITION='y' in install_constants?"
-                    exit 1
+                    return 1
                 fi
             elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_HOME_PARTITION" == 'y' ]]
             then
                 printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
                     "The home partition is being overwritten, so this luksOpen" \
                     "step should never fail. Must be a logic error."
-                exit 1
+                return 1
             fi
         fi
 
@@ -601,7 +602,7 @@ format_partitions()
             echo 'y' | mkfs.fat -F 32 $EFI_PARTITION \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Format EFI partition ($EFI_PARTITION) with FAT32"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "mkfs_efi" >> $COMPLETION_FILE
         fi
@@ -611,7 +612,7 @@ format_partitions()
             echo 'y' | mkfs.ext4 $BOOT_PARTITION \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Format boot partition ($BOOT_PARTITION) with EXT4"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "mkfs_boot" >> $COMPLETION_FILE
         fi
@@ -621,7 +622,7 @@ format_partitions()
             echo 'y' | mkfs.ext4 "$root_partition" \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Format root partition ($ROOT_PARTITION) with EXT4"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "mkfs_root" >> $COMPLETION_FILE
         fi
@@ -634,11 +635,13 @@ format_partitions()
             echo 'y' | mkfs.ext4 "$home_partition" \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Format home partition ($HOME_PARTITION) with EXT4"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "mkfs_home" >> $COMPLETION_FILE
         fi
     fi
+
+    return 0
 }
 
 mount_partitions()
@@ -650,7 +653,7 @@ mount_partitions()
     then
         mount "$root_partition" /mnt >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Mount the root partition ($ROOT_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "mount_root" >> $COMPLETION_FILE
     fi
@@ -665,7 +668,7 @@ mount_partitions()
             printf "\n\n\e[36m%s %s %s\e[0m\n" "[TIP]" \
                 "Is it possible OVERWRITE_HOME_PARTITION is set to 'n' in" \
                 "install_constants, but the existing home partition is empty?"
-            exit 1
+            return 1
         fi
 
         echo "mount_home" >> $COMPLETION_FILE
@@ -676,7 +679,7 @@ mount_partitions()
         mount --mkdir $BOOT_PARTITION /mnt/boot \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Mount the boot partition ($BOOT_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "mount_boot" >> $COMPLETION_FILE
     fi
@@ -686,10 +689,12 @@ mount_partitions()
         mount --mkdir $EFI_PARTITION /mnt/boot/efi \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Mount the efi partition ($EFI_PARTITION)"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "mount_efi" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 populate_crypttab()
@@ -701,21 +706,21 @@ populate_crypttab()
     then
         printf "\n\e[31m%s\e[0m\n" \
             "[!] Couldn't find encrypted root partition in blkid output"
-        exit 1
+        return 1
     fi
 
     if [[ -z "$ENCRYPTED_HOME_PARTITION_UUID" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
             "[!] Couldn't find encrypted home partition in blkid output"
-        exit 1
+        return 1
     fi
 
     if ! [[ -d /mnt/etc/ ]]
     then
         mkdir -p /mnt/etc 1>/dev/null 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Create /mnt/etc for crypttab"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
@@ -727,7 +732,7 @@ populate_crypttab()
                 echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && exit 1
+                [[ $? -ne 0 ]] && return 1
             fi
         fi
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
@@ -737,7 +742,7 @@ populate_crypttab()
                 echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && exit 1
+                [[ $? -ne 0 ]] && return 1
             fi
         fi
     fi
@@ -751,7 +756,7 @@ populate_crypttab()
                 echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && exit 1
+                [[ $? -ne 0 ]] && return 1
             fi
         fi
         if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
@@ -761,10 +766,12 @@ populate_crypttab()
                 echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && exit 1
+                [[ $? -ne 0 ]] && return 1
             fi
         fi
     fi
+
+    return 0
 }
 
 configure_swap()
@@ -774,13 +781,13 @@ configure_swap()
         if ! [[ "$SWAP_SIZE_IN_GB" =~ ^[1-9][0-9]*$ ]]
         then
             printf "\n\e[31m%s\e[0m\n" "[!] Invalid swap size: '$SWAP_SIZE_IN_GB'"
-            exit 1
+            return 1
         fi
 
         if [[ "$SWAP_SIZE_IN_GB" -gt 32 ]]
         then
             printf "\n\e[31m%s\e[0m\n" "[!] Max swap size is 32GB"
-            exit 1
+            return 1
         fi
 
         if ! grep "^mkswap$" $COMPLETION_FILE &>/dev/null
@@ -794,7 +801,7 @@ configure_swap()
             mkswap -U clear --size ${SWAP_SIZE_IN_GB}G --file /mnt/swapfile \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Create ${SWAP_SIZE_IN_GB}GB swapfile"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "mkswap" >> $COMPLETION_FILE
         fi
@@ -803,11 +810,13 @@ configure_swap()
         then
             swapon /mnt/swapfile >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Enable the swapfile"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "swapon" >> $COMPLETION_FILE
         fi
     fi
+
+    return 0
 }
 
 set_timezone()
@@ -818,7 +827,7 @@ set_timezone()
     then
         printf "\n\e[31m%s\e[0m %s\n" "[Error]" \
             "No user timezone passed to function, this shouldn't happen. Stopping."
-        exit 1
+        return 1
     fi
 
     if ! cmp -s "/usr/share/zoneinfo/${user_timezone}" /etc/localtime &>/dev/null
@@ -826,8 +835,10 @@ set_timezone()
         ln -sf "/usr/share/zoneinfo/${user_timezone}" /etc/localtime \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Set live system timezone: '$user_timezone'"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 set_apt_cache_server()
@@ -841,7 +852,7 @@ set_apt_cache_server()
                 > $APT_CACHE_FILE &
             task_output $! "$STDERR_LOG_PATH" \
                 "Use apt proxy server '$APT_CACHE_SERVER'"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         fi
 
         if ! apt-config dump | grep "Proxy" &>/dev/null
@@ -849,9 +860,11 @@ set_apt_cache_server()
             printf "\n\n\e[31m%s %s\e[0m\n\n" \
                 "[!] The apt proxy isn't set up correctly. This shouldn't" \
                 "happen...stopping"
-            exit 1
+            return 1
         fi
     fi
+
+    return 0
 }
 
 copy_apt_sources_to_live_system()
@@ -862,8 +875,10 @@ copy_apt_sources_to_live_system()
         cp ./DebianInstaller/configuration_files/sources.list /etc/apt/sources.list \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the current live system"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 apt_update()
@@ -872,10 +887,12 @@ apt_update()
     then
         apt-get update >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Update apt"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "apt_update" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 # DISCLAIMER: Only AMD CPU microcode, AMD iGPU firmware, and mediatek firmware
@@ -888,7 +905,7 @@ find_correct_firmware()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Install pciutils for finding the correct firmware with lspci"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     # GPU firmware
@@ -984,7 +1001,7 @@ find_correct_firmware()
         fi
     fi
 
-    declare -r FIRMWARE_PACKAGES
+    return 0
 }
 
 install_installer_scripts()
@@ -995,10 +1012,12 @@ install_installer_scripts()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Install arch-install-scripts"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "apt_install_installer_scripts" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 install_debootstrap()
@@ -1009,10 +1028,12 @@ install_debootstrap()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Install debootstrap"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "apt_install_debootstrap" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 run_debootstrap()
@@ -1026,17 +1047,19 @@ run_debootstrap()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Run debootstrap (this could take a while on slow internet)"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         else
             debootstrap --arch amd64 stable /mnt https://deb.debian.org/debian \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Run debootstrap (this could take a while on slow internet)"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         fi
 
         echo "run_debootstrap" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 generate_fstab_file()
@@ -1051,11 +1074,13 @@ generate_fstab_file()
                 "[!] It's likely debootstrap failed, and not genfstab" \
                 "     - try removing 'debootstrap' from the completion" \
                 "       file and running again"
-            exit 1
+            return 1
         fi
 
         echo "genfstab" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 set_hostname()
@@ -1064,15 +1089,17 @@ set_hostname()
     then
         echo "$HOSTNAME" > /mnt/etc/hostname &
         task_output $! "$STDERR_LOG_PATH" "Set the hostname to 'debian'"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! grep "^127.0.1.1 ${HOSTNAME}$" /mnt/etc/hosts &>/dev/null
     then
         echo -e "127.0.0.1 localhost\n127.0.1.1 $HOSTNAME" > /mnt/etc/hosts &
         task_output $! "$STDERR_LOG_PATH" "Populate the '/etc/hosts' file"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 copy_necessary_project_files_to_new_system()
@@ -1084,7 +1111,7 @@ copy_necessary_project_files_to_new_system()
             /mnt/etc/apt/sources.list \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Copy sources.list to the new system"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! cmp -s $PRETTY_OUTPUT_LIBRARY \
@@ -1094,7 +1121,7 @@ copy_necessary_project_files_to_new_system()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Copy '$PRETTY_OUTPUT_LIBRARY' to the new system"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! cmp -s ./DebianInstaller/finish_install.sh /mnt/finish_install.sh &>/dev/null
@@ -1103,8 +1130,10 @@ copy_necessary_project_files_to_new_system()
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Copy 'finish_install.sh' to the new system"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 export_necessary_variables()
@@ -1167,7 +1196,7 @@ export_necessary_variables()
     then
         printf "\n\e[31m%s\e[0m\n" \
             "Couldn't export variables: ${failed_variables[@]}"
-        exit 1
+        return 1
     fi
 
     printf "\r\e[32m[Success]\e[0m %s\n" \
@@ -1180,25 +1209,25 @@ if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
     if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
-        create_luks_keyfile_on_usb
+        create_luks_keyfile_on_usb || exit $?
 
         if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
         then
-            luks_format_root_with_keyfile
+            luks_format_root_with_keyfile || exit $?
         fi
         if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
         then
-            luks_format_home_with_keyfile
+            luks_format_home_with_keyfile || exit $?
         fi
     fi
 
     if [[ "$OVERWRITE_HOME_PARTITION" == 'n' ]]
     then
-        luks_open_home
+        luks_open_home || exit $?
     fi
     if [[ "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
     then
-        luks_open_root
+        luks_open_root || exit $?
     fi
 
     if [[ -n "$LUKS_PASSWORD" ]]
@@ -1207,70 +1236,73 @@ then
         then
             if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
             then
-                luks_add_passphrase_to_root
+                luks_add_passphrase_to_root || exit $?
             fi
             if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
             then
-                luks_add_passphrase_to_home
+                luks_add_passphrase_to_home || exit $?
             fi
         else
             if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
             then
-                luks_format_root_with_passphrase
+                luks_format_root_with_passphrase || exit $?
             fi
             if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
             then
-                luks_format_home_with_passphrase
+                luks_format_home_with_passphrase || exit $?
             fi
         fi
     fi
 
     if [[ "$OVERWRITE_HOME_PARTITION" == 'y' ]]
     then
-        luks_open_home
+        luks_open_home || exit $?
     fi
     if [[ "$OVERWRITE_ROOT_PARTITION" == 'y' ]]
     then
-        luks_open_root
+        luks_open_root || exit $?
     fi
 
     # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
     #
     # Doesn't overwrite root if "$SKIP_INSTALLING_PACKAGES" == 'y'
-    format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
-    mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root"
+    format_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root" || exit $?
+    mount_partitions "/dev/mapper/crypt_home" "/dev/mapper/crypt_root" || exit $?
 
-    populate_crypttab
+    populate_crypttab || exit $?
 elif [[ "$ENCRYPT_SYSTEM" == "n" ]]
 then
     # Doesn't overwrite home if "$OVERWRITE_HOME_PARTITION" == 'y'
     #
     # Doesn't overwrite root if "$SKIP_INSTALLING_PACKAGES" == 'y'
-    format_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
-    mount_partitions "$HOME_PARTITION" "$ROOT_PARTITION"
+    format_partitions "$HOME_PARTITION" "$ROOT_PARTITION" || exit $?
+    mount_partitions "$HOME_PARTITION" "$ROOT_PARTITION" || exit $?
 else
     printf "\n\e[31m%s %s\e[0m\n" "[Error]" \
         "\$ENCRYPT_SYSTEM variable in install_constants must be set to 'y' or 'n'"
+    exit $?
 fi
 
-configure_swap
-set_timezone "$TIMEZONE"
+configure_swap || exit $?
+set_timezone "$TIMEZONE" || exit $?
 
-set_apt_cache_server
-copy_apt_sources_to_live_system
-apt_update
-install_installer_scripts
+set_apt_cache_server || exit $?
+copy_apt_sources_to_live_system || exit $?
+apt_update || exit $?
+install_installer_scripts || exit $?
 
 if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
 then
-    find_correct_firmware
-    install_debootstrap
-    run_debootstrap
+    find_correct_firmware || exit $?
+    install_debootstrap || exit $?
+    run_debootstrap || exit $?
 fi
 
-generate_fstab_file
-set_hostname
-copy_necessary_project_files_to_new_system
-export_necessary_variables
+generate_fstab_file || exit $?
+set_hostname || exit $?
+copy_necessary_project_files_to_new_system || exit $?
+export_necessary_variables || exit $?
 
-arch-chroot /mnt /bin/bash finish_install.sh
+arch-chroot /mnt /bin/bash finish_install.sh || exit $?
+
+exit 0

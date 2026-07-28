@@ -1,5 +1,5 @@
 #!/bin/bash
-# safely_shutdown_system.sh - part of the DebianInstaller project
+# safely_close_system.sh - part of the DebianInstaller project
 # Copyright (C) 2026, Scott Wyman, development@scottwyman.me
 #
 # This program is free software: you can redistribute it and/or modify
@@ -144,18 +144,9 @@ close_encrypted_partitions()
     return 0
 }
 
-remove_sensitive_files || exit 1
-shutoff_swapfile || exit 1
-unmount_system || exit 1
-close_encrypted_partitions || exit 1
+remove_sensitive_files || exit $?
+shutoff_swapfile || exit $?
+unmount_system || exit $?
+close_encrypted_partitions || exit $?
 
-
-
-echo ""
-# Gives the user so many seconds to cancel the shutdown 
-for i in {5..1}; do
-    printf "\r%s \e[1;36m%s\e[0m" "Shutting Down In:" "$i"
-    sleep 1
-done
-
-shutdown now
+exit 0

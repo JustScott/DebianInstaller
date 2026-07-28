@@ -119,7 +119,7 @@ check_required_install_constants()
     return 0
 }
 
-check_required_install_constants || exit 1
+check_required_install_constants || exit $?
 
 if [[ "$OVERWRITE_HOME_PARTITION" == 'n' && ! -d "/home/$USER_USERNAME" ]]
 then
@@ -134,9 +134,9 @@ fi
 
 if [[ -n "$LUKS_PASSWORD" || -n "$LUKS_KEYFILE_PARTITION" ]]
 then
-    declare -r ENCRYPT_SYSTEM='y'
+    ENCRYPT_SYSTEM='y'
 else
-    declare -r ENCRYPT_SYSTEM='n'
+    ENCRYPT_SYSTEM='n'
 fi
 
 add_apt_proxy_if_enabled()
@@ -149,7 +149,7 @@ add_apt_proxy_if_enabled()
             echo "Acquire::http::Proxy \"$APT_CACHE_SERVER\";" > $APT_CACHE_FILE &
             task_output $! "$STDERR_LOG_PATH" \
                 "Use apt proxy server '$APT_CACHE_SERVER'"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         fi
 
         if ! apt-config dump | grep "Proxy" &>/dev/null
@@ -157,7 +157,7 @@ add_apt_proxy_if_enabled()
             printf "\n\n\e[31m%s %s\e[0m\n\n" \
                 "[!] The apt proxy isn't set up correctly. This shouldn't" \
                 "happen...stopping"
-            exit 1
+            return 1
         fi
 
         curl --max-time 5 "$APT_CACHE_SERVER" 1>/dev/null 2>$STDERR_LOG_PATH &
@@ -170,9 +170,11 @@ add_apt_proxy_if_enabled()
                 "'./DebianInstaller/install_constants' to your new apt cache" \
                 "server url, or remove the line entirely if you aren't using" \
                 "an apt cache server"
-            exit 1
+            return 1
         fi
     fi
+
+    return 0
 }
 
 update_apt()
@@ -181,10 +183,12 @@ update_apt()
     then
         apt-get update >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Update apt"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "apt_update" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 install_firmware()
@@ -197,9 +201,11 @@ install_firmware()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Install firmware packages: ($FIRMWARE_PACKAGES_STRING)"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         fi
     fi
+
+    return 0
 }
 
 install_desktop_environment()
@@ -225,12 +231,12 @@ install_desktop_environment()
                         libglib2.0-bin libpam-gnome-keyring gir1.2-gnomedesktop-3.0 \
                         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                     task_output $! "$STDERR_LOG_PATH" "Install gnome"
-                    [[ $? -ne 0 ]] && exit 1
+                    [[ $? -ne 0 ]] && return 1
                     ;;
                 *)
                     printf "\n\n\e[31m%s\e\n\n" \
                         "[!] Unsupported desktop environment: '$DESKTOP_ENVIRONMENT'"
-                    exit 1
+                    return 1
                     ;;
             esac
 
@@ -242,10 +248,12 @@ install_desktop_environment()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Install desktop environment helper packages (fonts, pipewire, etc)"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
             echo "install_desktop_environment" >> $COMPLETION_FILE
         fi
     fi
+
+    return 0
 }
 
 install_general_system_packages()
@@ -260,9 +268,11 @@ install_general_system_packages()
             network-manager wpasupplicant \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
         echo "install_general_system_packages" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 set_timezone()
@@ -272,8 +282,10 @@ set_timezone()
         ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Set timezone: '$TIMEZONE'"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 configure_locale()
@@ -281,12 +293,14 @@ configure_locale()
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
     locale-gen >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Generate locale"
-    [[ $? -ne 0 ]] && exit 1
+    [[ $? -ne 0 ]] && return 1
 
     echo "LANG=en_US.UTF-8" > /etc/default/locale
     update-locale LANG=en_US.UTF-8 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Update locale"
-    [[ $? -ne 0 ]] && exit 1
+    [[ $? -ne 0 ]] && return 1
+
+    return 0
 }
 
 set_plymouth_theme()
@@ -299,11 +313,13 @@ set_plymouth_theme()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Set the splash theme with plymouth-themes"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
 
             echo "set_splash_theme" >> $COMPLETION_FILE
         fi
     fi
+
+    return 0
 }
 
 encrypt_system_if_set()
@@ -319,8 +335,10 @@ encrypt_system_if_set()
             add_initramfs_module "nls_ascii"
         } >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add modules to initramfs for USB decryption"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 configure_grub()
@@ -332,7 +350,7 @@ configure_grub()
             cp /usr/share/grub/default/grub /etc/default/grub \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" "Configure Grub"
-            [[ $? -ne 0 ]] && exit 1
+            [[ $? -ne 0 ]] && return 1
         fi
 
         if ! grep "^GRUB_CMDLINE_LINUX_DEFAULT" /etc/default/grub &>/dev/null
@@ -369,6 +387,8 @@ configure_grub()
 
         echo "configure_grub" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 grub_install()
@@ -379,10 +399,12 @@ grub_install()
             --bootloader-id=debian --recheck $DISK \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install grub"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "grub_install" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 grub_update()
@@ -391,10 +413,12 @@ grub_update()
     then
         update-grub >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Apply Grub configuration"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "grub_update" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 update_initramfs()
@@ -403,10 +427,12 @@ update_initramfs()
     then
         update-initramfs -u -k all >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Update the initramfs"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
 
         echo "update_initramfs" >> $COMPLETION_FILE
     fi
+
+    return 0
 }
 
 create_and_setup_admin()
@@ -422,7 +448,7 @@ create_and_setup_admin()
         useradd --user-group $home_flag --uid 1000 -s /bin/bash "$ADMIN_USERNAME" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Create '$ADMIN_USERNAME' admin account"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     # Double check the admin account is created
@@ -430,28 +456,30 @@ create_and_setup_admin()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[!] user '$ADMIN_USERNAME' (admin) doesn't exist..." \
             "this shouldn't happen... stopping"
-        exit 1
+        return 1
     fi
 
     if ! groups "$ADMIN_USERNAME" | grep "sudo" &>/dev/null
     then
         usermod -aG sudo "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add '$ADMIN_USERNAME' (admin) to the sudo group"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if ! groups "$ADMIN_USERNAME" | grep "video" &>/dev/null
     then
         usermod -aG video "$ADMIN_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add '$ADMIN_USERNAME' (admin) to the video group"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     # No need for completion tracking, just set the password
     echo "${ADMIN_USERNAME}":"$ADMIN_PASSWORD" | chpasswd \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" "Set '$ADMIN_USERNAME' (admin) password"
-    [[ $? -ne 0 ]] && exit 1
+    [[ $? -ne 0 ]] && return 1
+
+    return 0
 }
 
 create_and_setup_user()
@@ -467,7 +495,7 @@ create_and_setup_user()
         useradd --user-group $home_flag --uid 1001 -s /bin/bash "$USER_USERNAME" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Create user account: '$USER_USERNAME'"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     # Double check the user account is created
@@ -475,14 +503,14 @@ create_and_setup_user()
     then
         printf "\n\e[31m%s %s\e[0m\n" "[!] user '$USER_USERNAME' doesn't exist..." \
             "this shouldn't happen... stopping"
-        exit 1
+        return 1
     fi
 
     if ! groups "$USER_USERNAME" | grep "video" &>/dev/null
     then
         usermod -aG video "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Add '$USER_USERNAME' to the video group"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
     if [[ -n "$USER_PASSWORD" ]]
@@ -490,13 +518,15 @@ create_and_setup_user()
         echo "$USER_USERNAME":"$USER_PASSWORD" | chpasswd \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Set ${USER_USERNAME}'s password"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     else
         # No need for completion tracking
         passwd -d "$USER_USERNAME" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Make ${USER_USERNAME}'s account passwordless"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 clone_debian_preset_to_user_homes()
@@ -510,17 +540,22 @@ clone_debian_preset_to_user_homes()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Clone DebianPreset to ${ADMIN_USERNAME}'s (admin) \$HOME"
+            [[ $? -ne 0 ]] && return 1
         fi
 
         if [[ -d /home/${ADMIN_USERNAME}/DebianPreset ]]
         then
-            chown "${ADMIN_USERNAME}":"${ADMIN_USERNAME}" -R "/home/${ADMIN_USERNAME}/DebianPreset"
+            chown "${ADMIN_USERNAME}":"${ADMIN_USERNAME}" -R "/home/${ADMIN_USERNAME}/DebianPreset" \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Give DebianPreset ownership to ${ADMIN_USERNAME}"
+            [[ $? -ne 0 ]] && return 1
         fi
     else
         printf "\n\e[31m%s %s\e[0m\n" \
             "[!] ${ADMIN_USERNAME}'s (admin) \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
-        exit 1
+        return 1
     fi
 
     if [[ -d "/home/${USER_USERNAME}" ]]
@@ -532,19 +567,26 @@ clone_debian_preset_to_user_homes()
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Clone DebianPreset to ${USER_USERNAME}'s \$HOME"
+            [[ $? -ne 0 ]] && return 1
         fi
         if [[ -d "/home/${USER_USERNAME}/DebianPreset" ]]
         then
-            chown "${USER_USERNAME}":"${USER_USERNAME}" -R "/home/${USER_USERNAME}/DebianPreset"
+            chown "${USER_USERNAME}":"${USER_USERNAME}" -R "/home/${USER_USERNAME}/DebianPreset" \
+                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" \
+                "Give DebianPreset ownership to ${USER_USERNAME}"
+            [[ $? -ne 0 ]] && return 1
         fi
     else
         printf "\n\e[31m%s %s\e[0m\n" \
             "[!] $USER_USERNAME's \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
-        exit 1
+        return 1
     fi
 
     cd /
+
+    return 0
 }
 
 hide_admin_on_login()
@@ -555,33 +597,35 @@ hide_admin_on_login()
         echo -e "[User]\nSystemAccount=true" \
             > "/var/lib/AccountsService/users/${ADMIN_USERNAME}" &
         task_output $! "$STDERR_LOG_PATH" "Remove '$ADMIN_USERNAME' (admin) from gdm login screen"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 enable_systemd_services()
 {
-    # No need for completion tracking
     if ! systemctl is-enabled NetworkManager &>/dev/null
     then
         systemctl enable NetworkManager >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Enable NetworkManager service"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
 
-    # No need for completion tracking
     if ! systemctl is-enabled unattended-upgrades &>/dev/null
     then
         systemctl enable unattended-upgrades >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Enable unattended-upgrades service"
-        [[ $? -ne 0 ]] && exit 1
+        [[ $? -ne 0 ]] && return 1
     fi
+
+    return 0
 }
 
 if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
 then
-    add_apt_proxy_if_enabled
-    update_apt
+    add_apt_proxy_if_enabled || exit $?
+    update_apt || exit $?
 fi
 
 debconf-set-selections > /dev/null 2>&1 <<EOF
@@ -593,24 +637,26 @@ EOF
 
 if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
 then
-    install_firmware
-    install_desktop_environment
-    install_general_system_packages
+    install_firmware || exit $?
+    install_desktop_environment || exit $?
+    install_general_system_packages || exit $?
 fi
 
-set_timezone
-configure_locale
-set_plymouth_theme
+set_timezone || exit $?
+configure_locale || exit $?
+set_plymouth_theme || exit $?
 
-encrypt_system_if_set
-configure_grub
-grub_install
-grub_update
-update_initramfs
+encrypt_system_if_set || exit $?
+configure_grub || exit $?
+grub_install || exit $?
+grub_update || exit $?
+update_initramfs || exit $?
 
-create_and_setup_admin
-create_and_setup_user
-clone_debian_preset_to_user_homes
+create_and_setup_admin || exit $?
+create_and_setup_user || exit $?
+clone_debian_preset_to_user_homes || exit $?
 
-hide_admin_on_login
-enable_systemd_services
+hide_admin_on_login || exit $?
+enable_systemd_services || exit $?
+
+exit 0

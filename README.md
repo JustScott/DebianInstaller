@@ -68,6 +68,23 @@ your initial installation, but you lost your USB stick with the keyfile or you
 forgot your passphrase. As long as you have one you can always add another.
 
 ### Post Installation Cleanup
-You can run `bash ./DebianInstaller/safely_shutdown_system.sh` after the
+You can run `bash ./DebianInstaller/safely_close_system.sh` after the
 installation scripts are done running to automatically remove sensitive
-files and safely unmount all the partitions.
+files and safely unmount all the partitions. Then just run `shutdown now`
+or `reboot`.
+
+
+## Testing
+`run_integration_tests.sh` is full of tests that will run the installer
+over and over (only installing packages on the first run) with different
+configurations and will only fail if any step of the installer fails.
+
+### Usage
+  * You are required to have a USB stick with a partition for the keyfile
+    as that is a vital part of the testing. You should not edit the `install_constants`
+    file at all during testing, only edit the `integration_tests_global_partition_variables`
+    file with the correct disk and partitions.
+  * A completion file will be created to ensure rerunning the script will not rerun tests
+    that have already passed, so delete entries in there to rerun any test. These tests
+    are meant to be run in order, one running successfully will verify that the one before
+    it also ran successfully.
