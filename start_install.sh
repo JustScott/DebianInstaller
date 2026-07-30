@@ -699,17 +699,17 @@ mount_partitions()
 
 populate_crypttab()
 {
-    ENCRYPTED_ROOT_PARTITION_UUID="$(blkid -s UUID -o value $ROOT_PARTITION)"
-    ENCRYPTED_HOME_PARTITION_UUID="$(blkid -s UUID -o value $HOME_PARTITION)"
+    LUKS_ROOT_PARTITION_UUID="$(blkid -s UUID -o value $ROOT_PARTITION)"
+    LUKS_HOME_PARTITION_UUID="$(blkid -s UUID -o value $HOME_PARTITION)"
 
-    if [[ -z "$ENCRYPTED_ROOT_PARTITION_UUID" ]]
+    if [[ -z "$LUKS_ROOT_PARTITION_UUID" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
             "[!] Couldn't find encrypted root partition in blkid output"
         return 1
     fi
 
-    if [[ -z "$ENCRYPTED_HOME_PARTITION_UUID" ]]
+    if [[ -z "$LUKS_HOME_PARTITION_UUID" ]]
     then
         printf "\n\e[31m%s\e[0m\n" \
             "[!] Couldn't find encrypted home partition in blkid output"
@@ -723,51 +723,32 @@ populate_crypttab()
         [[ $? -ne 0 ]] && return 1
     fi
 
-    if ! grep "$ENCRYPTED_ROOT_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
+    if [[ -n "$LUKS_PASSWORD" ]]
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
+        if [[ "$USE_KEYFILE_AT_BOOT" == 'n' || -z "$LUKS_KEYFILE_PARTITION" ]]
         then
-            if [[ "$USE_KEYFILE_AT_BOOT" == 'n' || -z "$LUKS_KEYFILE_PARTITION" ]]
-            then
-                echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+            echo "crypt_root UUID=$LUKS_ROOT_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+                > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Add LUKS entry for root to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && return 1
+            echo "crypt_home UUID=$LUKS_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-                task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && return 1
-            fi
-        fi
-        if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
-        then
-            if [[ "$USE_KEYFILE_AT_BOOT" == 'y' || -z "$LUKS_PASSWORD" ]]
-            then
-                echo "crypt_root UUID=$ENCRYPTED_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
-                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-                task_output $! "$STDERR_LOG_PATH" "Add encrypted root to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && return 1
-            fi
+            task_output $! "$STDERR_LOG_PATH" "Add LUKS entry for home to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && return 1
         fi
     fi
-
-    if ! grep "$ENCRYPTED_HOME_PARTITION_UUID" /mnt/etc/crypttab &>/dev/null
+    if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
     then
-        if [[ -n "$LUKS_PASSWORD" ]]
+        if [[ "$USE_KEYFILE_AT_BOOT" == 'y' || -z "$LUKS_PASSWORD" ]]
         then
-            if [[ "$USE_KEYFILE_AT_BOOT" == 'n' || -z "$LUKS_KEYFILE_PARTITION" ]]
-            then
-                echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID none luks,discard,keyscript=decrypt_keyctl,initramfs" \
+            echo "crypt_root UUID=$LUKS_ROOT_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
+                > /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
+            task_output $! "$STDERR_LOG_PATH" "Add LUKS entry for root to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && return 1
+            echo "crypt_home UUID=$LUKS_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
                 >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-                task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && return 1
-            fi
-        fi
-        if [[ -n "$LUKS_KEYFILE_PARTITION" ]]
-        then
-            if [[ "$USE_KEYFILE_AT_BOOT" == 'y' || -z "$LUKS_PASSWORD" ]]
-            then
-                echo "crypt_home UUID=$ENCRYPTED_HOME_PARTITION_UUID /dev/disk/by-label/keyfile_usb:/luks_keyfile:60 luks,discard,keyscript=passdev,tries=2,initramfs" \
-                >> /mnt/etc/crypttab 2>>"$STDERR_LOG_PATH" &
-                task_output $! "$STDERR_LOG_PATH" "Add encrypted home to /mnt/etc/crypttab"
-                [[ $? -ne 0 ]] && return 1
-            fi
+            task_output $! "$STDERR_LOG_PATH" "Add LUKS entry for home to /mnt/etc/crypttab"
+            [[ $? -ne 0 ]] && return 1
         fi
     fi
 
@@ -1176,9 +1157,6 @@ export_necessary_variables()
     export LUKS_PASSWORD \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("LUKS_PASSWORD")
-    export USE_KEYFILE_AT_BOOT \
-        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
-        || failed_variables+=("USE_KEYFILE_AT_BOOT")
 
     export DESKTOP_ENVIRONMENT \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \

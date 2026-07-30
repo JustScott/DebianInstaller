@@ -105,17 +105,6 @@ check_required_install_constants()
         return 1
     fi
 
-    if [[ -n "$LUKS_KEYFILE_PARTITION" && -n "$LUKS_PASSWORD" ]]
-    then
-        if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
-        then
-            printf "\n\e[31m%s %s\e[0m\n" \
-                "[!] \$USE_KEYFILE_AT_BOOT constant must be 'y' or 'n'," \
-                "this is fatal...stopping"
-            return 1
-        fi
-    fi
-
     return 0
 }
 
