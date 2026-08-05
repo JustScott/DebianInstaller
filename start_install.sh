@@ -88,6 +88,49 @@ check_required_install_constants()
             "[!] \$HOME_PARTITION constant not set, this is fatal...stopping"
         return 1
     fi
+
+    if [[ -n "$RAID_LEVEL" ]]
+    then
+        if ! [[ "$RAID_LEVEL" =~ ^(0|1|4|5|6|10)$ ]]
+        then
+            printf "\n\n\e[31m%s %s\e[0m \e[36m%s\e[0m\n" "[ERROR]" \
+                "Raid level '$RAID_LEVEL' not supported." \
+                "Support levels are 0,1,4,5,6,10"
+            return 1
+        fi
+
+        if [[ -z "$RAID_ARRAY_DEVICE" ]]
+        then
+            printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+                "\$RAID_PARTITIONS constant must be populated if \$RAID_LEVEL is set."
+            return 1
+        fi
+
+        if [[ -z "${RAID_PARTITIONS[*]}" ]]
+        then
+            printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+                "\$RAID_PARTITIONS constant must be populated if \$RAID_LEVEL is set."
+            return 1
+        fi
+
+        for raid_partition in ${RAID_PARTITIONS[@]}
+        do
+            if ! [[ -b "$raid_partition" ]]
+            then
+                printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+                    "'$raid_partition' in the install constant '\$RAID_PARTITIONS' is not a valid partition"
+                return 1
+            fi
+        done
+
+        HOME_PARTITION="$RAID_ARRAY_DEVICE"
+    elif [[ ${#RAID_PARTITIONS[@]} > 1 ]]
+    then
+        printf "\n\e[31m%s %s\e[0m\n" "[ERROR]" \
+            "\$RAID_LEVEL constant must be populated if \$RAID_PARTITIONS is set."
+        return 1
+    fi
+
     if [[ "$OVERWRITE_HOME_PARTITION" != 'y' && "$OVERWRITE_HOME_PARTITION" != 'n' ]]
     then
         printf "\n\e[31m%s %s\e[0m\n" \
@@ -142,8 +185,7 @@ check_required_install_constants()
     if [[ "$ENABLE_WIFI" != 'y' && "$ENABLE_WIFI" != 'n' ]]
     then
         printf "\n\e[31m%s %s\e[0m\n" \
-            "[!] \$ENABLE_WIFI constant must be 'y' or 'n'," \
-            "this is fatal...stopping"
+            "[!] \$ENABLE_WIFI constant must be 'y' or 'n'." \
         return 1
     fi
 
@@ -151,8 +193,7 @@ check_required_install_constants()
     if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' && "$SKIP_INSTALLING_PACKAGES" != 'n' ]]
     then
         printf "\n\e[31m%s %s\e[0m\n" \
-            "[!] \$SKIP_INSTALLING_PACKAGES constant must be 'y' or 'n'," \
-            "this is fatal...stopping"
+            "[!] \$SKIP_INSTALLING_PACKAGES constant must be 'y' or 'n'." \
         return 1
     elif [[ "$SKIP_INSTALLING_PACKAGES" == 'y' ]]
     then
@@ -164,8 +205,7 @@ check_required_install_constants()
         if [[ "$USE_KEYFILE_AT_BOOT" != 'y' && "$USE_KEYFILE_AT_BOOT" != 'n' ]]
         then
             printf "\n\e[31m%s %s\e[0m\n" \
-                "[!] \$USE_KEYFILE_AT_BOOT constant must be 'y' or 'n'," \
-                "this is fatal...stopping"
+                "[!] \$USE_KEYFILE_AT_BOOT constant must be 'y' or 'n'."
             return 1
         fi
     fi
@@ -204,6 +244,95 @@ check_for_cache_server()
 }
 
 check_for_cache_server || exit $?
+
+stop_raid_arrays()
+{
+    if ! [[ -f /proc/mdstat ]]
+    then
+        return 1
+    fi
+
+    if grep "md[0-9]\+ : active" /proc/mdstat &>/dev/null
+    then
+        mdadm --stop --scan >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Stop active RAID array(s)"
+        if [[ $? -ne 0 ]]
+        then
+            printf "\n\n\e[36m%s %s %s %s\e[0m\n" "[TIP]" \
+                "If the live system is still mounted, try running" \
+                "DebianInstaller/safely_close_system.sh before" \
+                "running start_install.sh again"
+
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+create_raid_array()
+{
+    if ! grep "^create_raid_array$" $COMPLETION_FILE &>/dev/null
+    then
+        if [[ "$OVERWRITE_HOME_PARTITION" != 'y' ]] # Double check before overwriting anything
+        then
+            printf "\n\e[31m%s %s\e[0m\n" \
+                "[!] \$OVERWRITE_HOME_PARTITION not set to 'y' yet 'setup_raid_array'," \
+                "function is being called... This shouldn't happen. Stopping"
+            return 1
+        fi
+
+        wipefs --all "${RAID_PARTITIONS[@]}" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Wipe old partition data from RAID partitions: ${RAID_PARTITIONS[*]}"
+        [[ $? -ne 0 ]] && return 1
+
+        sudo mdadm --create $RAID_ARRAY_DEVICE \
+            --level=$RAID_LEVEL \
+            --raid-devices=${#RAID_PARTITIONS[@]} \
+            --metadata=1.2 \
+            --bitmap=internal \
+            --run \
+            "${RAID_PARTITIONS[@]}" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Create RAID $RAID_LEVEL array on partitions ${RAID_PARTITIONS[*]}"
+        [[ $? -ne 0 ]] && return 1
+
+        echo "create_raid_array" >> $COMPLETION_FILE
+    fi
+
+    return 0
+}
+
+configure_raid_array()
+{
+    if ! [[ -d "/mnt/etc/mdadm" ]]
+    then
+        mkdir -p /mnt/etc/mdadm >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" \
+            "Create /mnt/etc/mdadm for mdadm.conf"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    sudo mdadm --detail --scan | sudo tee /mnt/etc/mdadm/mdadm.conf \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" \
+        "Add RAID array details to /mnt/etc/mdadm/mdadm.conf (Automatically starts raid array at boot)"
+    [[ $? -ne 0 ]] && return 1
+
+    return 0
+}
+
+assemble_existing_raid_array()
+{
+    mdadm --assemble $RAID_ARRAY_DEVICE "${RAID_PARTITIONS[@]}" \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+    task_output $! "$STDERR_LOG_PATH" \
+        "Assemble existing RAID array '$RAID_ARRAY_DEVICE' with partitions: ${RAID_PARTITIONS[*]}"
+    [[ $? -ne 0 ]] && return 1
+
+    return 0
+}
 
 create_luks_keyfile_on_usb()
 {
@@ -987,12 +1116,19 @@ find_correct_firmware()
 
 install_installer_scripts()
 {
+    local PACKAGES=(arch-install-scripts)
+
+    if [[ -b "$RAID_ARRAY_DEVICE" ]]
+    then
+        PACKAGES+=(mdadm)
+    fi
+
     if ! grep "^apt_install_installer_scripts$" $COMPLETION_FILE &>/dev/null
     then
-        apt-get install --yes arch-install-scripts \
+        apt-get install --yes "${PACKAGES[@]}" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
-            "Install arch-install-scripts"
+            "Install scripts needed for base system setup"
         [[ $? -ne 0 ]] && return 1
 
         echo "apt_install_installer_scripts" >> $COMPLETION_FILE
@@ -1126,6 +1262,10 @@ export_necessary_variables()
     export OVERWRITE_HOME_PARTITION \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("OVERWRITE_HOME_PARTITION")
+    export RAID_ARRAY_DEVICE \
+        >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
+        || failed_variables+=("RAID_ARRAY_DEVICE")
+
     export ADMIN_USERNAME \
         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" \
         || failed_variables+=("ADMIN_USERNAME")
@@ -1182,6 +1322,25 @@ export_necessary_variables()
 
     return 0
 }
+
+set_timezone "$TIMEZONE" || exit $?
+
+set_apt_cache_server || exit $?
+copy_apt_sources_to_live_system || exit $?
+apt_update || exit $?
+install_installer_scripts || exit $?
+
+if [[ -n "$RAID_ARRAY_DEVICE" ]]
+then
+    stop_raid_arrays || exit $?
+
+    if [[ $OVERWRITE_HOME_PARTITION == 'y' ]]
+    then
+        create_raid_array || exit $?
+    else
+        assemble_existing_raid_array || exit $?
+    fi
+fi
 
 if [[ "$ENCRYPT_SYSTEM" == "y" ]]
 then
@@ -1261,13 +1420,12 @@ else
     exit $?
 fi
 
-configure_swap || exit $?
-set_timezone "$TIMEZONE" || exit $?
+if [[ -n "$RAID_ARRAY_DEVICE" ]]
+then
+    configure_raid_array || exit $?
+fi
 
-set_apt_cache_server || exit $?
-copy_apt_sources_to_live_system || exit $?
-apt_update || exit $?
-install_installer_scripts || exit $?
+configure_swap || exit $?
 
 if [[ "$SKIP_INSTALLING_PACKAGES" != 'y' ]]
 then

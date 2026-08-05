@@ -144,9 +144,27 @@ close_encrypted_partitions()
     return 0
 }
 
+stop_raid_arrays()
+{
+    if ! [[ -f /proc/mdstat ]]
+    then
+        return 1
+    fi
+
+    if grep "md[0-9]\+ : active" /proc/mdstat &>/dev/null
+    then
+        mdadm --stop --scan >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        task_output $! "$STDERR_LOG_PATH" "Stop active RAID array(s)"
+        [[ $? -ne 0 ]] && return 1
+    fi
+
+    return 0
+}
+
 remove_sensitive_files || exit $?
 shutoff_swapfile || exit $?
 unmount_system || exit $?
 close_encrypted_partitions || exit $?
+stop_raid_arrays || exit $?
 
 exit 0

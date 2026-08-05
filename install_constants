@@ -11,18 +11,33 @@ TIMEZONE='America/Chicago'
 ENABLE_WIFI='y' # set to 'n' for systems using only ethernet
 
 # Manually partition with cfdisk, then update partition names here
+#
 DISK="/dev/vda"
 EFI_PARTITION="/dev/vda1"   # 1GB (EFI system)
 BOOT_PARTITION="/dev/vda2"  # 1GB (Linux filesystem)
 ROOT_PARTITION="/dev/vda3"  # Atleast 10GB for installing system packages (Linux filesystem)
 HOME_PARTITION="/dev/vda4"  # Remaining space for user packages (Linux filesystem)
+
+# Use a raid array for your home partition. $HOME_PARTITION above will be
+# ignored if the variables below are uncommented and populated correctly.
+#
+# Raid 1 is the only tested configuration, but other raid levels should work
+# as they are just being passed into the mdadm command directly.
+#
+#RAID_ARRAY_DEVICE='/dev/md0' # Only change if you know what you're doing
+#RAID_LEVEL='1'
+#RAID_PARTITIONS=(/dev/sda1 /dev/sdb1)
+
+# Setting to 'n' is useful for reinstalling your system to fix any potential
+# issues or upgrading between major versions, without wiping out any user data
+#
 OVERWRITE_HOME_PARTITION='n' # 'y' overwrites, 'n' uses existing
 
 # SKIP_INSTALLING_PACKAGES='y' is what OVERWRITE_ROOT_PARTITION='n' would've
 # been. While the root partition is largely overwritten, it's just not formatted
 # causing total deletion of all data, like packages.
 #
-# 'y' means no packages are installed (other than arch-install-scripts). 
+# 'y' means no packages are installed (other than a few basics). 
 # Useful when you want to use the installer to change your password, hostname,
 # etc, or you want to add a new luks encryption method. Saves time not 
 # reinstalling gnome and all the other large packages.

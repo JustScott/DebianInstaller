@@ -247,15 +247,22 @@ install_desktop_environment()
 
 install_general_system_packages()
 {
+    local PACKAGES=(
+        locales neovim curl wget git unattended-upgrades sudo
+        linux-image-amd64 grub-efi-amd64-bin
+        cryptsetup cryptsetup-initramfs
+        efibootmgr efivar keyutils
+        network-manager wpasupplicant
+    )
+
+    if [[ -b "$RAID_ARRAY_DEVICE" ]]
+    then
+        PACKAGES+=(mdadm)
+    fi
+
     if ! grep "^install_general_system_packages$" $COMPLETION_FILE &>/dev/null
     then
-        apt-get install --yes \
-            locales neovim curl wget git unattended-upgrades sudo \
-            linux-image-amd64 grub-efi-amd64-bin \
-            cryptsetup cryptsetup-initramfs \
-            efibootmgr efivar keyutils \
-            network-manager wpasupplicant \
-            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        apt-get install --yes "${PACKAGES[@]}" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
         [[ $? -ne 0 ]] && return 1
         echo "install_general_system_packages" >> $COMPLETION_FILE

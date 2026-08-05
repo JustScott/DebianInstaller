@@ -9,6 +9,7 @@ First, create 4 partitions:
   * 1GB boot partition
   * 20GB root partition # (Atleast) Can make however large you need
   * home partition with the remaining disk space
+  * OR multiple partitions when using RAID
 
 ```bash
 sudo -i # become root now for running later commands
