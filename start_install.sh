@@ -599,6 +599,8 @@ luks_open_root()
                 fi
             elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_ROOT_PARTITION" == 'n' ]]
             then
+                printf "\n\e[36m%s %s\e[0m\n\n" "[TIP]" \
+                        "It's okay if this fails, as long as subsequent steps don't"
                 echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $ROOT_PARTITION \
                     crypt_root >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" \
@@ -690,6 +692,8 @@ luks_open_home()
                 fi
             elif [[ $luks_open_return_code -ne 0 && "$OVERWRITE_HOME_PARTITION" == 'n' ]]
             then
+                printf "\n\e[36m%s %s\e[0m\n\n" "[TIP]" \
+                    "It's okay if this fails, as long as subsequent steps don't"
                 echo -n "$LUKS_PASSWORD" | cryptsetup open --key-file=- $HOME_PARTITION \
                     crypt_home >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                 task_output $! "$STDERR_LOG_PATH" \
