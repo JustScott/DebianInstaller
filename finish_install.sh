@@ -201,44 +201,52 @@ install_desktop_environment()
 {
     if [[ -n "$DESKTOP_ENVIRONMENT" ]]
     then
-        if ! grep "^install_desktop_environment$" $COMPLETION_FILE &>/dev/null
-        then
-            case "$DESKTOP_ENVIRONMENT" in
-                "gnome")
+        case "$DESKTOP_ENVIRONMENT" in
+            "gnome")
+                local GNOME_PACKAGES=(
+                    gdm3 gnome-backgrounds gnome-bluetooth-sendto
+                    gnome-control-center gnome-keyring gnome-menus
+                    gnome-session gnome-settings-daemon gnome-shell
+                    orca gnome-sushi adwaita-icon-theme glib-networking
+                    gsettings-desktop-schemas evince gnome-calculator
+                    gnome-calendar gnome-terminal gnome-software
+                    gnome-text-editor gnome-snapshot tecla loupe nautilus
+                    totem simple-scan zenity evolution-data-server
+                    fonts-cantarell gstreamer1.0-packagekit
+                    gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+                    gvfs-backends gvfs-fuse libatk-adaptor libcanberra-pulse
+                    libglib2.0-bin libpam-gnome-keyring gir1.2-gnomedesktop-3.0
+                )
+                if ! dpkg -s "${GNOME_PACKAGES[@]}" &>/dev/null
+                then
                     apt-get install --no-install-recommends --yes \
-                        gdm3 gnome-backgrounds gnome-bluetooth-sendto \
-                        gnome-control-center gnome-keyring gnome-menus \
-                        gnome-session gnome-settings-daemon gnome-shell \
-                        orca gnome-sushi adwaita-icon-theme glib-networking \
-                        gsettings-desktop-schemas evince gnome-calculator \
-                        gnome-calendar gnome-terminal gnome-software \
-                        gnome-text-editor gnome-snapshot tecla loupe nautilus \
-                        totem simple-scan zenity evolution-data-server \
-                        fonts-cantarell gstreamer1.0-packagekit \
-                        gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-                        gvfs-backends gvfs-fuse libatk-adaptor libcanberra-pulse \
-                        libglib2.0-bin libpam-gnome-keyring gir1.2-gnomedesktop-3.0 \
+                        "${GNOME_PACKAGES[@]}" \
                         >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
                     task_output $! "$STDERR_LOG_PATH" "Install gnome"
                     [[ $? -ne 0 ]] && return 1
-                    ;;
-                *)
-                    printf "\n\n\e[31m%s\e\n\n" \
-                        "[!] Unsupported desktop environment: '$DESKTOP_ENVIRONMENT'"
-                    return 1
-                    ;;
-            esac
+                fi
+                ;;
+            *)
+                printf "\n\n\e[31m%s\e\n\n" \
+                    "[!] Unsupported desktop environment: '$DESKTOP_ENVIRONMENT'"
+                return 1
+                ;;
+        esac
 
-            apt-get install --yes \
-                fonts-recommended fonts-noto* \
-                plymouth plymouth-themes \
-                system-config-printer-common system-config-printer-udev cups \
-                power-profiles-daemon pipewire-audio \
+        local HELPER_PACKAGES=(
+            fonts-recommended fonts-noto*
+            plymouth plymouth-themes
+            system-config-printer-common system-config-printer-udev cups
+            power-profiles-daemon pipewire-audio
+        )
+
+        if ! dpkg -s "${HELPER_PACKAGES[@]}" &>/dev/null
+        then
+            apt-get install --yes "${HELPER_PACKAGES[@]}" \
                 >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
             task_output $! "$STDERR_LOG_PATH" \
                 "Install desktop environment helper packages (fonts, pipewire, etc)"
             [[ $? -ne 0 ]] && return 1
-            echo "install_desktop_environment" >> $COMPLETION_FILE
         fi
     fi
 
@@ -260,12 +268,12 @@ install_general_system_packages()
         PACKAGES+=(mdadm)
     fi
 
-    if ! grep "^install_general_system_packages$" $COMPLETION_FILE &>/dev/null
+    if ! dpkg -s "${PACKAGES[@]}" &>/dev/null
     then
-        apt-get install --yes "${PACKAGES[@]}" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
+        apt-get install --yes "${PACKAGES[@]}" \
+            >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" "Install general system packages"
         [[ $? -ne 0 ]] && return 1
-        echo "install_general_system_packages" >> $COMPLETION_FILE
     fi
 
     return 0

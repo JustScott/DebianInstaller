@@ -1127,15 +1127,13 @@ install_installer_scripts()
         PACKAGES+=(mdadm)
     fi
 
-    if ! grep "^apt_install_installer_scripts$" $COMPLETION_FILE &>/dev/null
+    if ! dpkg -s "${PACKAGES[@]}" &>/dev/null
     then
         apt-get install --yes "${PACKAGES[@]}" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Install scripts needed for base system setup"
         [[ $? -ne 0 ]] && return 1
-
-        echo "apt_install_installer_scripts" >> $COMPLETION_FILE
     fi
 
     return 0
@@ -1143,15 +1141,15 @@ install_installer_scripts()
 
 install_debootstrap()
 {
-    if ! grep "^apt_install_debootstrap$" $COMPLETION_FILE &>/dev/null
+    local PACKAGES=(debootstrap)
+
+    if ! dpkg -s "${PACKAGES[@]}" &>/dev/null
     then
-        apt-get install --yes debootstrap \
+        apt-get install --yes "${PACKAGES[@]}" \
             >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
         task_output $! "$STDERR_LOG_PATH" \
             "Install debootstrap"
         [[ $? -ne 0 ]] && return 1
-
-        echo "apt_install_debootstrap" >> $COMPLETION_FILE
     fi
 
     return 0
