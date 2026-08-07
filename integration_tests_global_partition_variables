@@ -4,5 +4,7 @@ BOOT_PARTITION="/dev/vda2"
 ROOT_PARTITION="/dev/vda3"
 HOME_PARTITION="/dev/vda4"
 
+RAID_PARTITIONS=(/dev/vda4 /dev/vda5)
+
 # Some tests will not be ran if left empty
-LUKS_KEYFILE_PARTITION="/dev/sda1"
+LUKS_KEYFILE_PARTITION="/dev/vda6"

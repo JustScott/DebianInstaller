@@ -80,12 +80,24 @@ or `reboot`.
 over and over (only installing packages on the first run) with different
 configurations and will only fail if any step of the installer fails.
 
+### Partition Setup
+  * To make testing easy, just create all the partitions on one disk
+    * /dev/vda1 - 1GB EFI
+    * /dev/vda2 - 1GB Boot
+    * /dev/vda3 - 15GB Root
+    * /dev/vda4 - 10GB Home
+    * /dev/vda5 - 10GB Home (for RAID 1 tests)
+    * /dev/vda6 - 512MB Keyfile
+  * Ensure those match the `integration_tests_global_partition_variables`
+    file before continuing
+
+
 ### Usage
-  * You are required to have a USB stick with a partition for the keyfile
-    as that is a vital part of the testing. You should not edit the `install_constants`
-    file at all during testing, only edit the `integration_tests_global_partition_variables`
-    file with the correct disk and partitions.
-  * A completion file will be created to ensure rerunning the script will not rerun tests
-    that have already passed, so delete entries in there to rerun any test. These tests
-    are meant to be run in order, one running successfully will verify that the one before
-    it also ran successfully.
+  * You should not edit the `install_constants` file at all during testing,
+    only edit the `integration_tests_global_partition_variables` file with
+    the correct disk and partitions.
+  * A completion file will be created to ensure rerunning the script will not
+    rerun tests that have already passed, so delete entries in there to rerun
+    any test. These tests are meant to be run in order, one running successfully
+    will verify that the one before it also ran successfully.
+  * Now just run `run_integration_tests.sh`

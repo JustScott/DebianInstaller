@@ -198,7 +198,13 @@ set_variable() {
     local VARIABLE_NAME="$2"
     local VARIABLE_VALUE="${@:3}"
 
-    if ! grep "^$VARIABLE_NAME=" "$INSTALL_CONSTANTS_FILE" &>/dev/null
+    # Thank you chatgpt for: `\(# \?\)\?`
+    #   * In my own words, there are two `\` for escaping `(` and `)`, then the
+    #     `# \?` inside means `#` is mandator and the space after is optional,
+    #     and finally the `\?` outside the `()` means the whole thing is optional
+    #     effectively allow a comment with a space or just a comment before any
+    #     of the variables
+    if ! grep "^\(# \?\)\?$VARIABLE_NAME=" "$INSTALL_CONSTANTS_FILE" &>/dev/null
     then
         printf "\n\e[31m%s %s\e[0m\n" "[FATAL ERROR]" \
             "Test '$TEST_NAME' failed trying to set non-existant variable '$VARIABLE_NAME'"
@@ -211,7 +217,7 @@ set_variable() {
     # LUMO COMMENT: Escape &, backslash, and your comma delimiter
     local SAFE_VALUE=$(printf '%s' "$VARIABLE_VALUE" | sed 's/[&\\,]/\\&/g')
 
-    sed -i "s,^${VARIABLE_NAME}=.*,${VARIABLE_NAME}='${SAFE_VALUE}'," \
+    sed -i "s,^\(# \?\)\?${VARIABLE_NAME}=.*,${VARIABLE_NAME}=${SAFE_VALUE}," \
         "$INSTALL_CONSTANTS_FILE" >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
     task_output $! "$STDERR_LOG_PATH" \
         "TEST ['$TEST_NAME']: Set $VARIABLE_NAME='$SAFE_VALUE'"
@@ -266,13 +272,13 @@ create_fresh_luks_system()
 
         pre_test_preparations
 
-        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "y"
-        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "n"
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'y'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'n'"
 
-        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" ""
-        set_variable "$TEST_NAME" "LUKS_PASSWORD" "test"
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "''"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "'test'"
 
-        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "n"
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "'n'"
 
         bash $START_INSTALL_SCRIPT || return $?
 
@@ -281,7 +287,7 @@ create_fresh_luks_system()
         post_test_cleanup
     fi
 
-    return 0   
+    return 0
 }
 
 # All the tests below are not built to be ran on an unencrypted system, so
@@ -297,13 +303,13 @@ create_fresh_no_luks_system()
 
         pre_test_preparations
 
-        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "y"
-        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "n"
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'y'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'n'"
 
-        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" ""
-        set_variable "$TEST_NAME" "LUKS_PASSWORD" ""
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "''"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "''"
 
-        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" ""
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "''"
 
         bash $START_INSTALL_SCRIPT || return $?
 
@@ -312,7 +318,7 @@ create_fresh_no_luks_system()
         post_test_cleanup
     fi
 
-    return 0   
+    return 0
 }
 
 test_1()
@@ -326,14 +332,13 @@ test_1()
 
         pre_test_preparations
 
-        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "n"
-        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "y"
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'n'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'y'"
 
-        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "$LUKS_KEYFILE_PARTITION"
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "'$LUKS_KEYFILE_PARTITION'"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "'test'"
 
-        set_variable "$TEST_NAME" "LUKS_PASSWORD" "test"
-
-        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "y"
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "'y'"
 
         bash $START_INSTALL_SCRIPT || return $?
 
@@ -342,7 +347,7 @@ test_1()
         post_test_cleanup
     fi
 
-    return 0   
+    return 0
 }
 
 test_2()
@@ -356,13 +361,13 @@ test_2()
 
         pre_test_preparations
 
-        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "n"
-        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "y"
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'n'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'y'"
 
-        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "$LUKS_KEYFILE_PARTITION"
-        set_variable "$TEST_NAME" "LUKS_PASSWORD" "test2"
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "'$LUKS_KEYFILE_PARTITION'"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "'test2'"
 
-        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "n"
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "'n'"
 
         bash $START_INSTALL_SCRIPT || return $?
 
@@ -371,7 +376,7 @@ test_2()
         post_test_cleanup
     fi
 
-    return 0   
+    return 0
 }
 
 test_3()
@@ -385,13 +390,13 @@ test_3()
 
         pre_test_preparations
 
-        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "n"
-        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "y"
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'n'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'y'"
 
-        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "$LUKS_KEYFILE_PARTITION"
-        set_variable "$TEST_NAME" "LUKS_PASSWORD" "test2"
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "'$LUKS_KEYFILE_PARTITION'"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "'test2'"
 
-        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "y"
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "'y'"
 
         bash $START_INSTALL_SCRIPT || return $?
 
@@ -400,7 +405,40 @@ test_3()
         post_test_cleanup
     fi
 
-    return 0   
+    return 0
+}
+
+test_4()
+{
+    local TEST_NAME="test_4"
+    local TEST_DESCRIPTION="Test replacing the home partition with a raid 1 array"
+
+    if ! grep "^${TEST_NAME}$" $COMPLETION_FILE &>/dev/null
+    then
+        introduce_test "$TEST_NAME" "$TEST_DESCRIPTION"
+
+        pre_test_preparations
+
+        set_variable "$TEST_NAME" "OVERWRITE_HOME_PARTITION" "'y'"
+        set_variable "$TEST_NAME" "SKIP_INSTALLING_PACKAGES" "'n'"
+
+        set_variable "$TEST_NAME" "RAID_ARRAY_DEVICE" "'/dev/md0'"
+        set_variable "$TEST_NAME" "RAID_LEVEL" "'1'"
+        set_variable "$TEST_NAME" "RAID_PARTITIONS" "(${RAID_PARTITIONS[*]})"
+
+        set_variable "$TEST_NAME" "LUKS_KEYFILE_PARTITION" "'$LUKS_KEYFILE_PARTITION'"
+        set_variable "$TEST_NAME" "LUKS_PASSWORD" "'test4'"
+
+        set_variable "$TEST_NAME" "USE_KEYFILE_AT_BOOT" "'y'"
+
+        bash $START_INSTALL_SCRIPT || return $?
+
+        echo "$TEST_NAME" >> $COMPLETION_FILE
+
+        post_test_cleanup
+    fi
+
+    return 0
 }
 
 # All tests only change their required variables, meaning they all depend on
@@ -427,6 +465,7 @@ create_fresh_luks_system || exit $?
 test_1 || exit $?
 test_2 || exit $?
 test_3 || exit $?
+test_4 || exit $?
 
 # -- TESTS FINISHED --
 
