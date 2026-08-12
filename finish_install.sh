@@ -533,55 +533,18 @@ create_and_setup_user()
     return 0
 }
 
-clone_debian_preset_to_user_homes()
+ensure_user_homes_exist()
 {
-    if [[ -d "/home/${ADMIN_USERNAME}" ]]
+    if ! [[ -d "/home/${ADMIN_USERNAME}" ]]
     then
-        if ! [[ -d /home/${ADMIN_USERNAME}/DebianPreset ]]
-        then
-            cd "/home/${ADMIN_USERNAME}"
-            git clone https://www.github.com/JustScott/DebianPreset \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "Clone DebianPreset to ${ADMIN_USERNAME}'s (admin) \$HOME"
-            [[ $? -ne 0 ]] && return 1
-        fi
-
-        if [[ -d /home/${ADMIN_USERNAME}/DebianPreset ]]
-        then
-            chown "${ADMIN_USERNAME}":"${ADMIN_USERNAME}" -R "/home/${ADMIN_USERNAME}/DebianPreset" \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "Give DebianPreset ownership to ${ADMIN_USERNAME}"
-            [[ $? -ne 0 ]] && return 1
-        fi
-    else
         printf "\n\e[31m%s %s\e[0m\n" \
             "[!] ${ADMIN_USERNAME}'s (admin) \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
         return 1
     fi
 
-    if [[ -d "/home/${USER_USERNAME}" ]]
+    if ! [[ -d "/home/${USER_USERNAME}" ]]
     then
-        if ! [[ -d "/home/${USER_USERNAME}/DebianPreset" ]]
-        then
-            cd "/home/${USER_USERNAME}"
-            git clone https://www.github.com/JustScott/DebianPreset \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "Clone DebianPreset to ${USER_USERNAME}'s \$HOME"
-            [[ $? -ne 0 ]] && return 1
-        fi
-        if [[ -d "/home/${USER_USERNAME}/DebianPreset" ]]
-        then
-            chown "${USER_USERNAME}":"${USER_USERNAME}" -R "/home/${USER_USERNAME}/DebianPreset" \
-                >>"$STDOUT_LOG_PATH" 2>>"$STDERR_LOG_PATH" &
-            task_output $! "$STDERR_LOG_PATH" \
-                "Give DebianPreset ownership to ${USER_USERNAME}"
-            [[ $? -ne 0 ]] && return 1
-        fi
-    else
         printf "\n\e[31m%s %s\e[0m\n" \
             "[!] $USER_USERNAME's \$HOME doesn't exist, this shouldn't" \
             "happen... stopping"
@@ -658,7 +621,7 @@ update_initramfs || exit $?
 
 create_and_setup_admin || exit $?
 create_and_setup_user || exit $?
-clone_debian_preset_to_user_homes || exit $?
+ensure_user_homes_exist || exit $?
 
 hide_admin_on_login || exit $?
 enable_systemd_services || exit $?
