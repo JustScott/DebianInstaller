@@ -258,7 +258,7 @@ stop_raid_arrays()
         task_output $! "$STDERR_LOG_PATH" "Stop active RAID array(s)"
         if [[ $? -ne 0 ]]
         then
-            printf "\n\n\e[36m%s %s %s %s\e[0m\n" "[TIP]" \
+            printf "\n\e[36m%s %s %s %s\e[0m\n\n" "[TIP]" \
                 "If the live system is still mounted, try running" \
                 "DebianInstaller/safely_close_system.sh before" \
                 "running start_install.sh again"
